@@ -208,13 +208,11 @@ export default function GoalSettingFlow({ visible, onClose, onComplete }: GoalSe
       }
 
       // Save goals
-      console.log('💾 Saving budgets:', goals);
       for (const goal of goals) {
         await StorageService.saveBudget(goal);
       }
 
       // Mark goal setting as completed
-      console.log('🎯 Marking goal setting as completed');
       await StorageService.setGoalSettingCompleted(true);
 
       onComplete(goals);

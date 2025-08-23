@@ -112,7 +112,6 @@ export default function RedesignedOnboarding({ onComplete }: RedesignedOnboardin
   const iconScale = useRef(new Animated.Value(1)).current;
   const textOpacity = useRef(new Animated.Value(1)).current;
   const featureOpacity = useRef(new Animated.Value(1)).current;
-  const scrollX = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     // Animate slide transition
@@ -142,27 +141,6 @@ export default function RedesignedOnboarding({ onComplete }: RedesignedOnboardin
       })
     ]).start();
   }, [currentSlide]);
-
-  const handleScroll = Animated.event(
-    [{ nativeEvent: { contentOffset: { x: scrollX } } }],
-    { useNativeDriver: false }
-  );
-
-  const handleScrollEnd = (event: any) => {
-    const contentOffset = event.nativeEvent.contentOffset;
-    const viewSize = event.nativeEvent.layoutMeasurement;
-    const selectedIndex = Math.floor(contentOffset.x / viewSize.width);
-    
-    if (selectedIndex !== currentSlide) {
-      // Reset animations
-      slideAnimation.setValue(0);
-      iconScale.setValue(0.8);
-      textOpacity.setValue(0);
-      featureOpacity.setValue(0);
-      
-      setCurrentSlide(selectedIndex);
-    }
-  };
 
   const nextSlide = () => {
     if (currentSlide < onboardingSlides.length - 1) {
@@ -239,7 +217,7 @@ export default function RedesignedOnboarding({ onComplete }: RedesignedOnboardin
             }
           ]}
         >
-          {/* Icon with enhanced animation */`}
+          {/* Icon with enhanced animation */}
           <Animated.View 
             style={[
               styles.iconContainer, 
@@ -363,8 +341,6 @@ export default function RedesignedOnboarding({ onComplete }: RedesignedOnboardin
         pagingEnabled
         showsHorizontalScrollIndicator={false}
         style={styles.slideContainer}
-        onScroll={handleScroll}
-        onMomentumScrollEnd={handleScrollEnd}
         scrollEventThrottle={16}
         // Disable scrolling during animations
         scrollEnabled={true}

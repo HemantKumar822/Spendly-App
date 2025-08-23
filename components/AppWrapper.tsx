@@ -29,35 +29,28 @@ function AppContent({ children }: AppWrapperProps) {
       // Initialize storage
       await StorageService.initializeApp();
       
-      // Debug storage values
-      await StorageService.debugStorage();
+      // FOR TESTING PURPOSES: Always show onboarding
+      // Comment out the following line to revert to normal behavior
+      setShowWelcome(true);
       
+      // Uncomment the following lines to restore normal behavior
+      /*
       // Check if this is first launch
       const isFirstLaunch = await StorageService.isFirstLaunch();
       const onboardingCompleted = await StorageService.isOnboardingCompleted();
       const goalSettingCompleted = await StorageService.isGoalSettingCompleted();
       
-      console.log('🚀 App initialization:', { isFirstLaunch, onboardingCompleted, goalSettingCompleted });
-      
-      // Show welcome screen for first-time users or users who haven't completed onboarding
       if (isFirstLaunch || !onboardingCompleted) {
-        console.log('📱 Showing welcome screen because:', isFirstLaunch ? 'first launch' : 'onboarding not completed');
         setShowWelcome(true);
-      } 
-      // For returning users who completed onboarding but haven't set goals
-      else if (!goalSettingCompleted) {
+      } else if (!goalSettingCompleted) {
         // Check if user has any budgets set up
         const existingBudgets = await StorageService.getBudgets();
-        console.log('📊 Checking goal setting:', { goalSettingCompleted, budgetCount: existingBudgets.length });
         if (existingBudgets.length === 0) {
-          console.log('🎯 Showing goal setting because no budgets exist');
           setShowGoalSetting(true);
         }
       }
-      // For users who have completed everything, go to main app
-      else {
-        console.log('✅ User has completed onboarding and goal setting, showing main app');
-      }
+      */
+      
     } catch (error) {
       console.error('Error initializing app:', error);
     } finally {
@@ -66,32 +59,39 @@ function AppContent({ children }: AppWrapperProps) {
   };
 
   const handleWelcomeStart = () => {
-    console.log('▶️ User started onboarding flow');
     setShowWelcome(false);
     setShowOnboarding(true);
   };
 
   const handleOnboardingComplete = async () => {
     try {
-      console.log('🎉 Onboarding completed, setting flags');
+      // FOR TESTING PURPOSES: Don't mark onboarding as completed
+      // Uncomment the following lines to restore normal behavior
+      /*
       // Mark onboarding as completed
       await StorageService.setOnboardingCompleted();
       await StorageService.setFirstLaunchCompleted();
       
-      // Don't populate with sample data - let new users start with a clean app
-      // await StorageService.populateSampleData();
+      // Populate with sample data
+      await StorageService.populateSampleData();
+      */
       
       setShowOnboarding(false);
       
-      // Check if we need to show goal setting for new users with no budgets
+      // FOR TESTING PURPOSES: Always show goal setting after onboarding
+      // Comment out the following lines to revert to normal behavior
+      setShowGoalSetting(true);
+      
+      // Uncomment the following lines to restore normal behavior
+      /*
+      // Check if we need to show goal setting
       const goalSettingCompleted = await StorageService.isGoalSettingCompleted();
       const existingBudgets = await StorageService.getBudgets();
-      
-      console.log('🎯 Checking goal setting after onboarding:', { goalSettingCompleted, budgetCount: existingBudgets.length });
       
       if (!goalSettingCompleted && existingBudgets.length === 0) {
         setShowGoalSetting(true);
       }
+      */
     } catch (error) {
       console.error('Error completing onboarding:', error);
       setShowOnboarding(false);
@@ -100,8 +100,7 @@ function AppContent({ children }: AppWrapperProps) {
 
   const handleGoalSettingComplete = async (budgets: Budget[]) => {
     try {
-      console.log('🎯 Goal setting completed with budgets:', budgets.length);
-      await StorageService.setGoalSettingCompleted(true);
+      console.log('Goal setting completed with budgets:', budgets.length);
       setShowGoalSetting(false);
     } catch (error) {
       console.error('Error completing goal setting:', error);

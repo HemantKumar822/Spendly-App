@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   StyleSheet,
   View,
@@ -15,7 +15,6 @@ import { useTheme, Theme } from '@/contexts/ThemeContext';
 import { useResponsive, useResponsiveSpacing, useResponsiveTypography, useResponsiveIcons } from '@/hooks/useResponsive';
 import { StorageService } from '@/services/storage';
 import EnhancedAIFeaturesShowcase from './EnhancedAIFeaturesShowcase';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const { width: screenWidth } = Dimensions.get('window');
 
@@ -104,7 +103,6 @@ export default function IntegratedOnboardingFlow({ onComplete }: IntegratedOnboa
   const typography = useResponsiveTypography();
   const icons = useResponsiveIcons();
   const styles = getStyles(theme, isTablet, spacing, typography, icons);
-  const insets = useSafeAreaInsets();
   
   const [currentSlide, setCurrentSlide] = useState(0);
   const [showAIShowcase, setShowAIShowcase] = useState(false);
@@ -112,80 +110,20 @@ export default function IntegratedOnboardingFlow({ onComplete }: IntegratedOnboa
   const scrollX = useRef(new Animated.Value(0)).current;
   
   // Animation values
-  const skipButtonScale = useRef(new Animated.Value(1)).current;
   const slideAnimation = useRef(new Animated.Value(0)).current;
   const iconScale = useRef(new Animated.Value(1)).current;
   const textOpacity = useRef(new Animated.Value(1)).current;
   const featureOpacity = useRef(new Animated.Value(1)).current;
 
-  // Create the scroll handler as a separate function to avoid the TypeError
-  const handleScroll = Animated.event(
-    [{ nativeEvent: { contentOffset: { x: scrollX } } }],
-    { useNativeDriver: false }
-  );
-
-  // Animate slide transition when currentSlide changes
-  useEffect(() => {
-    Animated.parallel([
-      Animated.timing(slideAnimation, {
-        toValue: 1,
-        duration: 500,
-        easing: Easing.out(Easing.ease),
-        useNativeDriver: true,
-      }),
-      Animated.timing(iconScale, {
-        toValue: 1,
-        duration: 600,
-        easing: Easing.elastic(1.2),
-        useNativeDriver: true,
-      }),
-      Animated.timing(textOpacity, {
-        toValue: 1,
-        duration: 400,
-        useNativeDriver: true,
-      }),
-      Animated.timing(featureOpacity, {
-        toValue: 1,
-        duration: 500,
-        delay: 200,
-        useNativeDriver: true,
-      })
-    ]).start();
-  }, [currentSlide]);
-
-  const handleScrollEnd = (event: any) => {
-    const contentOffset = event.nativeEvent.contentOffset;
-    const viewSize = event.nativeEvent.layoutMeasurement;
-    const selectedIndex = Math.floor(contentOffset.x / viewSize.width);
-    
-    if (selectedIndex !== currentSlide) {
-      // Reset animations
-      slideAnimation.setValue(0);
-      iconScale.setValue(0.8);
-      textOpacity.setValue(0);
-      featureOpacity.setValue(0);
-      
-      setCurrentSlide(selectedIndex);
-    }
-  };
-
   const nextSlide = () => {
     if (currentSlide < onboardingSlides.length - 1) {
       const nextIndex = currentSlide + 1;
-      
-      // Reset animations
-      slideAnimation.setValue(0);
-      iconScale.setValue(0.8);
-      textOpacity.setValue(0);
-      featureOpacity.setValue(0);
-      
       setCurrentSlide(nextIndex);
       scrollViewRef.current?.scrollTo({
         x: nextIndex * screenWidth,
         animated: true,
       });
     } else {
-      console.log('🏁 User completed onboarding flow');
       handleCompleteOnboarding();
     }
   };
@@ -193,13 +131,6 @@ export default function IntegratedOnboardingFlow({ onComplete }: IntegratedOnboa
   const prevSlide = () => {
     if (currentSlide > 0) {
       const prevIndex = currentSlide - 1;
-      
-      // Reset animations
-      slideAnimation.setValue(0);
-      iconScale.setValue(0.8);
-      textOpacity.setValue(0);
-      featureOpacity.setValue(0);
-      
       setCurrentSlide(prevIndex);
       scrollViewRef.current?.scrollTo({
         x: prevIndex * screenWidth,
@@ -209,19 +140,17 @@ export default function IntegratedOnboardingFlow({ onComplete }: IntegratedOnboa
   };
 
   const skipOnboarding = () => {
-    console.log('⏭️ User skipped onboarding');
     handleCompleteOnboarding();
   };
 
   const handleCompleteOnboarding = async () => {
     try {
-      console.log('✅ Completing onboarding process');
       // Mark onboarding as completed
       await StorageService.setOnboardingCompleted();
       await StorageService.setFirstLaunchCompleted();
       
-      // Remove sample data population so new users start with a clean app
-      // await StorageService.populateSampleData();
+      // Populate with sample data
+      await StorageService.populateSampleData();
       
       onComplete();
     } catch (error) {
@@ -296,12 +225,6 @@ export default function IntegratedOnboardingFlow({ onComplete }: IntegratedOnboa
           <TouchableOpacity
             key={index}
             onPress={() => {
-              // Reset animations
-              slideAnimation.setValue(0);
-              iconScale.setValue(0.8);
-              textOpacity.setValue(0);
-              featureOpacity.setValue(0);
-              
               setCurrentSlide(index);
               scrollViewRef.current?.scrollTo({
                 x: index * screenWidth,
@@ -324,23 +247,13 @@ export default function IntegratedOnboardingFlow({ onComplete }: IntegratedOnboa
   return (
     <SafeAreaView style={styles.container}>
       {/* Skip Button */}
-      <View style={[styles.topBar, { marginTop: insets.top }]}>
+      <View style={styles.topBar}>
         <TouchableOpacity
           onPress={skipOnboarding}
           style={styles.skipButton}
-          onPressIn={() => Animated.spring(skipButtonScale, {
-            toValue: 0.9,
-            useNativeDriver: true,
-          }).start()}
-          onPressOut={() => Animated.spring(skipButtonScale, {
-            toValue: 1,
-            useNativeDriver: true,
-          }).start()}
-          activeOpacity={1}
+          activeOpacity={0.8}
         >
-          <Animated.View style={{ transform: [{ scale: skipButtonScale }] }}>
-            <Text style={styles.skipButtonText}>Skip</Text>
-          </Animated.View>
+          <Text style={styles.skipButtonText}>Skip</Text>
         </TouchableOpacity>
       </View>
 
@@ -351,15 +264,17 @@ export default function IntegratedOnboardingFlow({ onComplete }: IntegratedOnboa
         pagingEnabled
         showsHorizontalScrollIndicator={false}
         style={styles.slideContainer}
-        onScroll={handleScroll}
-        onMomentumScrollEnd={handleScrollEnd}
+        onScroll={Animated.event(
+          [{ nativeEvent: { contentOffset: { x: scrollX } } }],
+          { useNativeDriver: true }
+        )}
         scrollEventThrottle={16}
       >
         {onboardingSlides.map((slide, index) => renderSlide(slide, index))}
       </ScrollView>
 
       {/* Bottom Section */}
-      <View style={[styles.bottomSection, { backgroundColor: theme.surface, paddingBottom: insets.bottom }]}>
+      <View style={[styles.bottomSection, { backgroundColor: theme.surface }]}>
         {/* Progress Text */}
         <Text style={[styles.progressText, { color: theme.textTertiary }]}>
           {currentSlide + 1} of {onboardingSlides.length}
@@ -426,23 +341,17 @@ const getStyles = (theme: Theme, isTablet: boolean, spacing: any, typography: an
     justifyContent: 'flex-end',
     paddingHorizontal: spacing.containerPadding,
     paddingVertical: spacing.itemMargin,
-    // Ensure the skip button area is clearly visible
-    zIndex: 1,
   },
   skipButton: {
     paddingHorizontal: spacing.itemMargin,
-    paddingVertical: spacing.listGap / 2,
+    paddingVertical: spacing.listGap,
     borderRadius: spacing.buttonRadius,
-    // Completely minimal design - no background, border, or shadow
-    backgroundColor: 'transparent',
-    borderWidth: 0,
-    shadowOpacity: 0,
-    elevation: 0,
+    backgroundColor: theme.surfaceVariant,
   },
   skipButtonText: {
     fontSize: typography.caption,
-    color: theme.textSecondary,
-    fontWeight: '400', // Lighter font weight for a more minimal look
+    color: theme.text,
+    fontWeight: '500',
   },
   slideContainer: {
     flex: 1,

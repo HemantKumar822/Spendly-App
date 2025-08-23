@@ -28,14 +28,13 @@ export class StorageService {
     try {
       const isFirstLaunch = await AsyncStorage.getItem(STORAGE_KEYS.FIRST_LAUNCH);
       
-      if (isFirstLaunch === null) {
+      if (!isFirstLaunch) {
         // First time launching the app, set up default categories
         await this.saveCategories(DEFAULT_CATEGORIES);
+        await AsyncStorage.setItem(STORAGE_KEYS.FIRST_LAUNCH, 'false');
         await AsyncStorage.setItem(STORAGE_KEYS.EXPENSES, JSON.stringify([]));
         await AsyncStorage.setItem(STORAGE_KEYS.BUDGETS, JSON.stringify([]));
         await AsyncStorage.setItem(STORAGE_KEYS.INSIGHTS, JSON.stringify([]));
-        // Set FIRST_LAUNCH to 'true' for first launch detection
-        await AsyncStorage.setItem(STORAGE_KEYS.FIRST_LAUNCH, 'true');
       }
     } catch (error) {
       const appError = ErrorHandler.storageError(
@@ -183,9 +182,7 @@ export class StorageService {
   static async getBudgets(): Promise<Budget[]> {
     try {
       const budgetsJson = await AsyncStorage.getItem(STORAGE_KEYS.BUDGETS);
-      const budgets = budgetsJson ? JSON.parse(budgetsJson) : [];
-      console.log('💰 Retrieved budgets from storage:', budgets);
-      return budgets;
+      return budgetsJson ? JSON.parse(budgetsJson) : [];
     } catch (error) {
       console.error('Error getting budgets:', error);
       return [];
@@ -203,8 +200,6 @@ export class StorageService {
         budgets.push(budget);
       }
       
-      console.log('💾 Saving budget to storage:', budget);
-      console.log('💾 All budgets in storage now:', budgets);
       await AsyncStorage.setItem(STORAGE_KEYS.BUDGETS, JSON.stringify(budgets));
     } catch (error) {
       console.error('Error saving budget:', error);
@@ -519,19 +514,6 @@ export class StorageService {
   }
 
   // Utility operations
-  static async debugStorage(): Promise<void> {
-    try {
-      const keys = Object.values(STORAGE_KEYS);
-      console.log('🔍 Debugging AsyncStorage values:');
-      for (const key of keys) {
-        const value = await AsyncStorage.getItem(key);
-        console.log(`  ${key}:`, value);
-      }
-    } catch (error) {
-      console.error('Error debugging storage:', error);
-    }
-  }
-
   static async clearAllData(): Promise<void> {
     try {
       await AsyncStorage.multiRemove([
@@ -612,9 +594,15 @@ export class StorageService {
   // Onboarding and first launch methods
   static async isFirstLaunch(): Promise<boolean> {
     try {
+      // FOR TESTING PURPOSES: Always return true to show welcome screen
+      // Uncomment the following lines to restore normal behavior
+      /*
       const isFirstLaunch = await AsyncStorage.getItem(STORAGE_KEYS.FIRST_LAUNCH);
-      console.log('🔍 isFirstLaunch check:', isFirstLaunch, isFirstLaunch === 'true');
-      return isFirstLaunch === 'true';
+      return isFirstLaunch === null;
+      */
+      
+      // FOR TESTING: Always return true
+      return true;
     } catch (error) {
       console.error('Error checking first launch:', error);
       return true;
@@ -623,8 +611,14 @@ export class StorageService {
 
   static async setFirstLaunchCompleted(): Promise<void> {
     try {
-      console.log('✅ Setting first launch completed');
+      // FOR TESTING PURPOSES: Don't actually set first launch completed
+      // Uncomment the following lines to restore normal behavior
+      /*
       await AsyncStorage.setItem(STORAGE_KEYS.FIRST_LAUNCH, 'false');
+      */
+      
+      // FOR TESTING: Do nothing
+      console.log('First launch completed (but not actually saved for testing)');
     } catch (error) {
       console.error('Error setting first launch completed:', error);
       throw error;
@@ -633,9 +627,15 @@ export class StorageService {
 
   static async isOnboardingCompleted(): Promise<boolean> {
     try {
+      // FOR TESTING PURPOSES: Always return false to show onboarding
+      // Uncomment the following lines to restore normal behavior
+      /*
       const completed = await AsyncStorage.getItem(STORAGE_KEYS.ONBOARDING_COMPLETED);
-      console.log('🔍 isOnboardingCompleted check:', completed, completed === 'true');
       return completed === 'true';
+      */
+      
+      // FOR TESTING: Always return false
+      return false;
     } catch (error) {
       console.error('Error checking onboarding status:', error);
       return false;
@@ -644,8 +644,14 @@ export class StorageService {
 
   static async setOnboardingCompleted(): Promise<void> {
     try {
-      console.log('✅ Setting onboarding completed');
+      // FOR TESTING PURPOSES: Don't actually set onboarding completed
+      // Uncomment the following lines to restore normal behavior
+      /*
       await AsyncStorage.setItem(STORAGE_KEYS.ONBOARDING_COMPLETED, 'true');
+      */
+      
+      // FOR TESTING: Do nothing
+      console.log('Onboarding completed (but not actually saved for testing)');
     } catch (error) {
       console.error('Error setting onboarding completed:', error);
       throw error;
@@ -654,12 +660,16 @@ export class StorageService {
 
   static async populateSampleData(): Promise<void> {
     try {
+      // FOR TESTING PURPOSES: Always populate sample data
+      // Uncomment the following lines to restore normal behavior
+      /*
       const sampleDataAdded = await AsyncStorage.getItem(STORAGE_KEYS.SAMPLE_DATA_ADDED);
       
       if (sampleDataAdded === 'true') {
         console.log('Sample data already added, skipping...');
         return;
       }
+      */
 
       // Generate and save sample data
       const sampleExpenses = SampleDataGenerator.generateSampleExpenses();
@@ -681,7 +691,9 @@ export class StorageService {
         await this.saveInsight(insight);
       }
 
-      await AsyncStorage.setItem(STORAGE_KEYS.SAMPLE_DATA_ADDED, 'true');
+      // FOR TESTING: Don't mark sample data as added so it runs every time
+      // Uncomment the following line to restore normal behavior
+      // await AsyncStorage.setItem(STORAGE_KEYS.SAMPLE_DATA_ADDED, 'true');
       
       console.log('✅ Sample data populated successfully!');
     } catch (error) {
