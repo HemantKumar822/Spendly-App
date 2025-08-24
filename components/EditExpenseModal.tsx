@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   StyleSheet,
   View,
@@ -68,7 +68,7 @@ export default function EditExpenseModal({ visible, expense, onClose, onSave }: 
     }
   }, [visible, expense]);
 
-  const loadCategories = async () => {
+  const loadCategories = useCallback(async () => {
     try {
       const loadedCategories = await StorageService.getCategories();
       setCategories(loadedCategories);
@@ -76,9 +76,9 @@ export default function EditExpenseModal({ visible, expense, onClose, onSave }: 
       console.error('Error loading categories:', error);
       setCategories(DEFAULT_CATEGORIES);
     }
-  };
+  }, []);
 
-  const validateForm = (): boolean => {
+  const validateForm = useCallback((): boolean => {
     if (!expense) return false;
     
     // Validate all fields with immediate feedback
@@ -88,9 +88,9 @@ export default function EditExpenseModal({ visible, expense, onClose, onSave }: 
     validateNote(form.note || '', {}, true);
     
     return isFormValid;
-  };
+  }, [expense, form, categories, validateAmount, validateDescription, validateCategory, validateNote, isFormValid]);
 
-  const handleSave = async () => {
+  const handleSave = useCallback(async () => {
     if (!expense || !validateForm()) return;
     
     setLoading(true);
@@ -122,14 +122,14 @@ export default function EditExpenseModal({ visible, expense, onClose, onSave }: 
     } finally {
       setLoading(false);
     }
-  };
+  }, [expense, form, categories, validateForm, onSave, onClose]);
 
-  const handleClose = () => {
+  const handleClose = useCallback(() => {
     clearAllValidation();
     onClose();
-  };
+  }, [clearAllValidation, onClose]);
 
-  const renderCategoryGrid = () => {
+  const renderCategoryGrid = useCallback(() => {
     const rows = [];
     for (let i = 0; i < categories.length; i += 3) {
       const rowCategories = categories.slice(i, i + 3);
@@ -177,7 +177,7 @@ export default function EditExpenseModal({ visible, expense, onClose, onSave }: 
       );
     }
     return rows;
-  };
+  }, [categories, form.categoryId, validateCategory, styles]);
 
   if (!expense) return null;
 

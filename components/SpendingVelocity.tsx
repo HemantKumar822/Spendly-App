@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   StyleSheet,
   View,
@@ -68,53 +68,53 @@ export default function SpendingVelocity({ visible, onClose }: SpendingVelocityP
     }
   }, [visible, selectedPeriod]);
 
-  const loadVelocityData = async () => {
+  const loadVelocityData = useCallback(async () => {
     setLoading(true);
     try {
-      const [expensesData, categoriesData, budgetsData] = await Promise.all([
+      const [expensesData, budgetsData, categoriesData] = await Promise.all([
         StorageService.getExpenses(),
-        StorageService.getCategories(),
-        StorageService.getBudgets()
+        StorageService.getBudgets(),
+        StorageService.getCategories()
       ]);
-
+      
       setExpenses(expensesData);
+      setBudgets(budgetsData);
       setCategories(categoriesData);
-      setBudgets(budgetsData.filter(b => b.isActive));
-
-      // Calculate velocity insights
-      calculateVelocityInsights(expensesData, categoriesData, budgetsData.filter(b => b.isActive));
+      
+      // Generate velocity analysis based on selected period
+      generateVelocityAnalysis(expensesData, budgetsData, categoriesData);
     } catch (error) {
       console.error('Error loading velocity data:', error);
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  const onRefresh = async () => {
+  const onRefresh = useCallback(async () => {
     setRefreshing(true);
     await loadVelocityData();
     setRefreshing(false);
-  };
+  }, [loadVelocityData]);
 
-  const calculateVelocityInsights = (
+  const generateVelocityAnalysis = useCallback((
     expensesData: Expense[], 
-    categoriesData: ExpenseCategory[], 
-    budgetsData: Budget[]
+    budgetsData: Budget[], 
+    categoriesData: ExpenseCategory[]
   ) => {
     const now = new Date();
     const periodDays = selectedPeriod === 'week' ? 7 : 30;
     const startDate = new Date(now);
     startDate.setDate(now.getDate() - periodDays);
-
-    // Filter expenses within the period
+    
+    // Filter expenses within the selected period
     const periodExpenses = expensesData.filter(expense => {
       const expenseDate = new Date(expense.date);
-      return expenseDate >= startDate && expenseDate <= now;
+      return expenseDate >= startDate;
     });
 
-    // Calculate overall velocity
-    const totalSpent = periodExpenses.reduce((sum, expense) => sum + expense.amount, 0);
-    const currentVelocity = totalSpent / periodDays;
+    // Calculate current velocity (daily spending rate)
+    const totalAmount = periodExpenses.reduce((sum, expense) => sum + expense.amount, 0);
+    const currentVelocity = totalAmount / periodDays;
 
     // Calculate optimal velocity based on budgets
     const totalBudget = budgetsData.reduce((sum, budget) => {
@@ -179,9 +179,9 @@ export default function SpendingVelocity({ visible, onClose }: SpendingVelocityP
 
     // Calculate category velocities
     calculateCategoryVelocities(periodExpenses, categoriesData);
-  };
+  }, [selectedPeriod]);
 
-  const calculateWeeklyVelocity = (expensesData: Expense[]) => {
+  const calculateWeeklyVelocity = useCallback((expensesData: Expense[]) => {
     const weeks: PeriodVelocity[] = [];
     const now = new Date();
 
@@ -207,9 +207,12 @@ export default function SpendingVelocity({ visible, onClose }: SpendingVelocityP
     }
 
     setWeeklyVelocity(weeks);
-  };
+  }, []);
 
-  const calculateCategoryVelocities = (periodExpenses: Expense[], categoriesData: ExpenseCategory[]) => {
+  const calculateCategoryVelocities = useCallback((
+    periodExpenses: Expense[], 
+    categoriesData: ExpenseCategory[]
+  ) => {
     const categorySpending = new Map<string, number>();
     const totalSpent = periodExpenses.reduce((sum, expense) => sum + expense.amount, 0);
 
@@ -245,10 +248,23 @@ export default function SpendingVelocity({ visible, onClose }: SpendingVelocityP
     // Sort by percentage
     velocities.sort((a, b) => b.percentage - a.percentage);
     setCategoryVelocities(velocities.slice(0, 5)); // Top 5 categories
-  };
+  }, [selectedPeriod]);
 
-  const renderVelocityOverview = () => {
-    if (!velocityData) return null;
+  // Memoized velocity data to prevent unnecessary recalculations
+  const memoizedVelocityData = useMemo(() => {
+    return velocityData;
+  }, [velocityData]);
+
+  const memoizedWeeklyVelocity = useMemo(() => {
+    return weeklyVelocity;
+  }, [weeklyVelocity]);
+
+  const memoizedCategoryVelocities = useMemo(() => {
+    return categoryVelocities;
+  }, [categoryVelocities]);
+
+  const renderVelocityOverview = useCallback(() => {
+    if (!memoizedVelocityData) return null;
 
     const getRiskColor = (risk: string) => {
       switch (risk) {
@@ -273,12 +289,12 @@ export default function SpendingVelocity({ visible, onClose }: SpendingVelocityP
         
         <View style={styles.velocityGrid}>
           <View style={styles.velocityItem}>
-            <View style={[styles.velocityIcon, { backgroundColor: getRiskColor(velocityData.riskLevel) + '15' }]}>
-              <MaterialIcons name="speed" size={24} color={getRiskColor(velocityData.riskLevel)} />
+            <View style={[styles.velocityIcon, { backgroundColor: getRiskColor(memoizedVelocityData.riskLevel) + '15' }]}>
+              <MaterialIcons name="speed" size={24} color={getRiskColor(memoizedVelocityData.riskLevel)} />
             </View>
             <Text style={styles.velocityLabel}>Current Rate</Text>
-            <Text style={[styles.velocityValue, { color: getRiskColor(velocityData.riskLevel) }]}>
-              {formatCurrency(velocityData.currentVelocity)}/day
+            <Text style={[styles.velocityValue, { color: getRiskColor(memoizedVelocityData.riskLevel) }]}>
+              {formatCurrency(memoizedVelocityData.currentVelocity)}/day
             </Text>
           </View>
 
@@ -288,17 +304,17 @@ export default function SpendingVelocity({ visible, onClose }: SpendingVelocityP
             </View>
             <Text style={styles.velocityLabel}>Optimal Rate</Text>
             <Text style={[styles.velocityValue, { color: theme.primary }]}>
-              {formatCurrency(velocityData.optimalVelocity)}/day
+              {formatCurrency(memoizedVelocityData.optimalVelocity)}/day
             </Text>
           </View>
 
           <View style={styles.velocityItem}>
             <View style={[styles.velocityIcon, { backgroundColor: theme.secondary + '15' }]}>
-              <MaterialIcons name={getTrendIcon(velocityData.trend) as any} size={24} color={theme.secondary} />
+              <MaterialIcons name={getTrendIcon(memoizedVelocityData.trend) as any} size={24} color={theme.secondary} />
             </View>
             <Text style={styles.velocityLabel}>Trend</Text>
             <Text style={[styles.velocityValue, { color: theme.secondary }]}>
-              {velocityData.trend.charAt(0).toUpperCase() + velocityData.trend.slice(1)}
+              {memoizedVelocityData.trend.charAt(0).toUpperCase() + memoizedVelocityData.trend.slice(1)}
             </Text>
           </View>
 
@@ -307,28 +323,28 @@ export default function SpendingVelocity({ visible, onClose }: SpendingVelocityP
               <MaterialIcons name="warning" size={24} color={theme.orange} />
             </View>
             <Text style={styles.velocityLabel}>Risk Level</Text>
-            <Text style={[styles.velocityValue, { color: getRiskColor(velocityData.riskLevel) }]}>
-              {velocityData.riskLevel.charAt(0).toUpperCase() + velocityData.riskLevel.slice(1)}
+            <Text style={[styles.velocityValue, { color: getRiskColor(memoizedVelocityData.riskLevel) }]}>
+              {memoizedVelocityData.riskLevel.charAt(0).toUpperCase() + memoizedVelocityData.riskLevel.slice(1)}
             </Text>
           </View>
         </View>
 
-        {velocityData.projectedOverage > 0 && (
+        {memoizedVelocityData.projectedOverage > 0 && (
           <View style={styles.warningCard}>
             <MaterialIcons name="warning" size={20} color={theme.warning} />
             <Text style={styles.warningText}>
-              At current rate, you'll exceed budget by {formatCurrency(velocityData.projectedOverage)} this month
+              At current rate, you'll exceed budget by {formatCurrency(memoizedVelocityData.projectedOverage)} this month
             </Text>
           </View>
         )}
       </View>
     );
-  };
+  }, [memoizedVelocityData, theme, styles]);
 
-  const renderVelocityChart = () => {
-    if (weeklyVelocity.length === 0) return null;
+  const renderVelocityChart = useCallback(() => {
+    if (memoizedWeeklyVelocity.length === 0) return null;
 
-    const maxVelocity = Math.max(...weeklyVelocity.map(w => w.velocity));
+    const maxVelocity = Math.max(...memoizedWeeklyVelocity.map(w => w.velocity));
     const chartHeight = 120;
 
     return (
@@ -336,7 +352,7 @@ export default function SpendingVelocity({ visible, onClose }: SpendingVelocityP
         <Text style={styles.sectionTitle}>Weekly Velocity Trend</Text>
         
         <View style={styles.velocityChart}>
-          {weeklyVelocity.map((week, index) => {
+          {memoizedWeeklyVelocity.map((week, index) => {
             const barHeight = maxVelocity > 0 ? (week.velocity / maxVelocity) * chartHeight : 0;
             
             return (
@@ -347,7 +363,7 @@ export default function SpendingVelocity({ visible, onClose }: SpendingVelocityP
                       styles.bar, 
                       { 
                         height: barHeight,
-                        backgroundColor: week.velocity > (velocityData?.optimalVelocity || 0) ? theme.error : theme.primary
+                        backgroundColor: week.velocity > (memoizedVelocityData?.optimalVelocity || 0) ? theme.error : theme.primary
                       }
                     ]} 
                   />
@@ -360,16 +376,16 @@ export default function SpendingVelocity({ visible, onClose }: SpendingVelocityP
         </View>
       </View>
     );
-  };
+  }, [memoizedWeeklyVelocity, memoizedVelocityData, theme, styles]);
 
-  const renderCategoryVelocities = () => {
-    if (categoryVelocities.length === 0) return null;
+  const renderCategoryVelocities = useCallback(() => {
+    if (memoizedCategoryVelocities.length === 0) return null;
 
     return (
       <View style={styles.categoryCard}>
         <Text style={styles.sectionTitle}>Category Breakdown</Text>
         
-        {categoryVelocities.map((catVel, index) => {
+        {memoizedCategoryVelocities.map((catVel, index) => {
           const getRiskColor = (risk: string) => {
             switch (risk) {
               case 'high': return '#E53E3E';
@@ -400,9 +416,9 @@ export default function SpendingVelocity({ visible, onClose }: SpendingVelocityP
         })}
       </View>
     );
-  };
+  }, [memoizedCategoryVelocities, styles]);
 
-  const renderPeriodSelector = () => {
+  const renderPeriodSelector = useCallback(() => {
     return (
       <View style={styles.periodSelector}>
         <TouchableOpacity
@@ -429,7 +445,7 @@ export default function SpendingVelocity({ visible, onClose }: SpendingVelocityP
         </TouchableOpacity>
       </View>
     );
-  };
+  }, [selectedPeriod, styles]);
 
   if (!visible) return null;
 

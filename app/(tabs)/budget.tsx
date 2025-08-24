@@ -185,9 +185,13 @@ export default function BudgetScreen() {
   const renderBudgetHealthCard = () => {
     if (budgets.length === 0) return null;
 
-    const onTrack = budgetProgress.filter(p => !p.isOverBudget && p.percentage <= 80).length;
-    const atRisk = budgetProgress.filter(p => !p.isOverBudget && p.percentage > 80).length;
-    const overLimit = budgetProgress.filter(p => p.isOverBudget).length;
+    // Only consider active budgets for health calculation
+    const activeBudgetIds = budgets.filter(b => b.isActive).map(b => b.id);
+    const activeBudgetProgress = budgetProgress.filter(p => activeBudgetIds.includes(p.budgetId));
+    
+    const onTrack = activeBudgetProgress.filter(p => !p.isOverBudget && p.percentage <= 80).length;
+    const atRisk = activeBudgetProgress.filter(p => !p.isOverBudget && p.percentage > 80).length;
+    const overLimit = activeBudgetProgress.filter(p => p.isOverBudget).length;
 
     return (
       <View style={styles.healthCard}>
@@ -522,7 +526,7 @@ export default function BudgetScreen() {
           }} />
         ) : (
           <View style={styles.budgetsContainer}>
-            {budgets.map(budget => {
+            {budgets.filter(b => b.isActive).map(budget => {
               const progress = budgetProgress.find(p => p.budgetId === budget.id);
               console.log('📈 Rendering budget card:', budget.id, progress);
               return progress ? renderEnhancedBudgetCard(budget, progress) : null;

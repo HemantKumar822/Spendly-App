@@ -247,7 +247,7 @@ export default function ExpenseSearchModal({
     setShowAdvancedFilters(false);
   };
 
-  const toggleCategoryFilter = (categoryId: string) => {
+  const toggleCategoryFilter = useCallback((categoryId: string) => {
     triggerLightHaptic();
     setFilters(prev => ({
       ...prev,
@@ -255,33 +255,33 @@ export default function ExpenseSearchModal({
         ? prev.categories.filter(id => id !== categoryId)
         : [...prev.categories, categoryId]
     }));
-  };
+  }, [triggerLightHaptic]);
 
-  const updateAmountRange = (min: number | null, max: number | null) => {
+  const updateAmountRange = useCallback((min: number | null, max: number | null) => {
     setFilters(prev => ({
       ...prev,
       amountRange: { min, max }
     }));
-  };
+  }, []);
 
-  const updateDateRange = (startDate: Date | null, endDate: Date | null) => {
+  const updateDateRange = useCallback((startDate: Date | null, endDate: Date | null) => {
     setFilters(prev => ({
       ...prev,
       dateRange: { startDate, endDate }
     }));
-  };
+  }, []);
 
-  const handleSearchSubmit = () => {
+  const handleSearchSubmit = useCallback(() => {
     if (debouncedSearchQuery.trim()) {
       saveSearchQuery(debouncedSearchQuery);
     }
-  };
+  }, [debouncedSearchQuery]);
 
-  const handleRecentSearchSelect = (query: string) => {
+  const handleRecentSearchSelect = useCallback((query: string) => {
     triggerLightHaptic();
     setSearchQuery(query);
     setDebouncedSearchQuery(query);
-  };
+  }, [triggerLightHaptic]);
 
   const renderExpenseItem = useCallback(({ item: expense, index }: { item: Expense; index: number }) => {
     return (

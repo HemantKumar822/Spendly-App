@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   StyleSheet,
   View,
@@ -65,7 +65,7 @@ export default function CategoryDeepDive({ visible, onClose, selectedCategoryId 
     }
   }, [selectedCategoryId, categories, expenses]);
 
-  const loadData = async () => {
+  const loadData = useCallback(async () => {
     setLoading(true);
     try {
       const [expensesData, categoriesData] = await Promise.all([
@@ -100,15 +100,15 @@ export default function CategoryDeepDive({ visible, onClose, selectedCategoryId 
     } finally {
       setLoading(false);
     }
-  };
+  }, [selectedCategoryId]);
 
-  const onRefresh = async () => {
+  const onRefresh = useCallback(async () => {
     setRefreshing(true);
     await loadData();
     setRefreshing(false);
-  };
+  }, [loadData]);
 
-  const generateCategoryAnalysis = (category: ExpenseCategory) => {
+  const generateCategoryAnalysis = useCallback((category: ExpenseCategory) => {
     const now = new Date();
     const periodMonths = selectedPeriod === '3months' ? 3 : selectedPeriod === '6months' ? 6 : 12;
     const startDate = new Date(now);
@@ -170,9 +170,9 @@ export default function CategoryDeepDive({ visible, onClose, selectedCategoryId 
       topExpenses,
       frequencyData
     });
-  };
+  }, [expenses, selectedPeriod]);
 
-  const generateMonthlyTrend = (expenses: Expense[], months: number) => {
+  const generateMonthlyTrend = useCallback((expenses: Expense[], months: number) => {
     const monthlyData = new Map<string, number>();
     const now = new Date();
     
@@ -196,9 +196,9 @@ export default function CategoryDeepDive({ visible, onClose, selectedCategoryId 
       month,
       amount
     }));
-  };
+  }, []);
 
-  const generateFrequencyData = (expenses: Expense[]) => {
+  const generateFrequencyData = useCallback((expenses: Expense[]) => {
     const dayCount = new Map<string, number>();
     const daysOfWeek = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
     
@@ -217,9 +217,14 @@ export default function CategoryDeepDive({ visible, onClose, selectedCategoryId 
       day,
       count: dayCount.get(day) || 0
     }));
-  };
+  }, []);
 
-  const renderCategorySelector = () => {
+  // Memoized category analysis to prevent unnecessary recalculations
+  const memoizedCategoryAnalysis = useMemo(() => {
+    return categoryAnalysis;
+  }, [categoryAnalysis]);
+
+  const renderCategorySelector = useCallback(() => {
     if (categories.length === 0) return null;
 
     return (
@@ -260,9 +265,9 @@ export default function CategoryDeepDive({ visible, onClose, selectedCategoryId 
         </ScrollView>
       </View>
     );
-  };
+  }, [categories, expenses, selectedCategory, generateCategoryAnalysis, styles]);
 
-  const renderOverviewStats = () => {
+  const renderOverviewStats = useCallback(() => {
     if (!categoryAnalysis) return null;
 
     const stats = [
@@ -308,9 +313,9 @@ export default function CategoryDeepDive({ visible, onClose, selectedCategoryId 
         </View>
       </View>
     );
-  };
+  }, [categoryAnalysis, styles]);
 
-  const renderMonthlyTrend = () => {
+  const renderMonthlyTrend = useCallback(() => {
     if (!categoryAnalysis || categoryAnalysis.monthlyTrend.length === 0) return null;
 
     const maxAmount = Math.max(...categoryAnalysis.monthlyTrend.map(m => m.amount));
@@ -345,9 +350,9 @@ export default function CategoryDeepDive({ visible, onClose, selectedCategoryId 
         </View>
       </View>
     );
-  };
+  }, [categoryAnalysis, styles]);
 
-  const renderFrequencyAnalysis = () => {
+  const renderFrequencyAnalysis = useCallback(() => {
     if (!categoryAnalysis || categoryAnalysis.frequencyData.length === 0) return null;
 
     const maxCount = Math.max(...categoryAnalysis.frequencyData.map(d => d.count));
@@ -388,9 +393,9 @@ export default function CategoryDeepDive({ visible, onClose, selectedCategoryId 
         </Text>
       </View>
     );
-  };
+  }, [categoryAnalysis, styles]);
 
-  const renderTopExpenses = () => {
+  const renderTopExpenses = useCallback(() => {
     if (!categoryAnalysis || categoryAnalysis.topExpenses.length === 0) return null;
 
     return (
@@ -416,9 +421,9 @@ export default function CategoryDeepDive({ visible, onClose, selectedCategoryId 
         ))}
       </View>
     );
-  };
+  }, [categoryAnalysis, styles]);
 
-  const renderRecentExpenses = () => {
+  const renderRecentExpenses = useCallback(() => {
     if (!categoryAnalysis || categoryAnalysis.recentExpenses.length === 0) return null;
 
     return (
@@ -441,9 +446,9 @@ export default function CategoryDeepDive({ visible, onClose, selectedCategoryId 
         ))}
       </View>
     );
-  };
+  }, [categoryAnalysis, styles]);
 
-  const renderPeriodSelector = () => {
+  const renderPeriodSelector = useCallback(() => {
     const periods = [
       { key: '3months' as const, label: '3 Months' },
       { key: '6months' as const, label: '6 Months' },
@@ -473,7 +478,7 @@ export default function CategoryDeepDive({ visible, onClose, selectedCategoryId 
         ))}
       </View>
     );
-  };
+  }, [selectedPeriod, styles]);
 
   if (!visible) return null;
 

@@ -488,16 +488,6 @@ function DashboardScreen() {
         visible={levelVisible}
         onClose={() => setLevelVisible(false)}
       />
-      
-      {/* Floating Action Button */}
-      <FloatingActionButton
-        icon="add"
-        onPress={() => {
-          triggerMediumHaptic();
-          router.push('/(tabs)/add-expense');
-        }}
-        delay={600}
-      />
     </SafeAreaView>
   );
 }

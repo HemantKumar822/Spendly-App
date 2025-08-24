@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   StyleSheet,
   View,
@@ -60,7 +60,7 @@ export default function SpendingStreak({ visible, onClose }: SpendingStreakProps
     }
   }, [visible, selectedMonth]);
 
-  const loadStreakData = async () => {
+  const loadStreakData = useCallback(async () => {
     setLoading(true);
     try {
       const expenses = await StorageService.getExpenses();
@@ -74,9 +74,9 @@ export default function SpendingStreak({ visible, onClose }: SpendingStreakProps
     } finally {
       setLoading(false);
     }
-  };
+  }, [selectedMonth]);
 
-  const calculateStreakData = (expenses: Expense[]): StreakData => {
+  const calculateStreakData = useCallback((expenses: Expense[]): StreakData => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     
@@ -187,9 +187,9 @@ export default function SpendingStreak({ visible, onClose }: SpendingStreakProps
         percentage: (daysLoggedThisMonth / totalDaysInMonth) * 100
       }
     };
-  };
+  }, []);
 
-  const generateCalendarDays = (expenses: Expense[], month: Date): StreakCalendarDay[] => {
+  const generateCalendarDays = useCallback((expenses: Expense[], month: Date): StreakCalendarDay[] => {
     const expenseDates = new Set(expenses.map(expense => expense.date.split('T')[0]));
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -200,33 +200,49 @@ export default function SpendingStreak({ visible, onClose }: SpendingStreakProps
     // Get first day of month and its day of week
     const firstDay = new Date(year, monthIndex, 1);
     const lastDay = new Date(year, monthIndex + 1, 0);
-    const startDate = new Date(firstDay);
+    const daysInMonth = lastDay.getDate();
     
-    // Start from Sunday of the week containing the first day
-    startDate.setDate(startDate.getDate() - startDate.getDay());
+    // Get the day of week for the first day (0 = Sunday, 1 = Monday, etc.)
+    const firstDayOfWeek = firstDay.getDay();
     
-    const days: StreakCalendarDay[] = [];
-    const currentDate = new Date(startDate);
+    // Create array for calendar days
+    const calendarDays: StreakCalendarDay[] = [];
     
-    // Generate 42 days (6 weeks)
-    for (let i = 0; i < 42; i++) {
-      const dateString = currentDate.toISOString().split('T')[0];
-      const hasExpense = expenseDates.has(dateString);
-      const isToday = currentDate.toDateString() === today.toDateString();
-      const isCurrentMonth = currentDate.getMonth() === monthIndex;
-      
-      days.push({
-        date: dateString,
-        hasExpense,
-        isToday,
-        isCurrentMonth
+    // Add empty cells for days before the first day of the month
+    for (let i = 0; i < firstDayOfWeek; i++) {
+      calendarDays.push({
+        date: '',
+        hasExpense: false,
+        isToday: false,
+        isCurrentMonth: false
       });
-      
-      currentDate.setDate(currentDate.getDate() + 1);
     }
     
-    return days;
-  };
+    // Add days of the month
+    for (let day = 1; day <= daysInMonth; day++) {
+      const date = new Date(year, monthIndex, day);
+      const dateString = date.toISOString().split('T')[0];
+      const isToday = date.toDateString() === today.toDateString();
+      
+      calendarDays.push({
+        date: dateString,
+        hasExpense: expenseDates.has(dateString),
+        isToday,
+        isCurrentMonth: true
+      });
+    }
+    
+    return calendarDays;
+  }, []);
+
+  // Memoized streak data to prevent unnecessary recalculations
+  const memoizedStreakData = React.useMemo(() => {
+    return streakData;
+  }, [streakData]);
+
+  const memoizedCalendarDays = React.useMemo(() => {
+    return calendarDays;
+  }, [calendarDays]);
 
   const getStreakEmoji = (streak: number): string => {
     if (streak === 0) return '😴';
@@ -269,7 +285,7 @@ export default function SpendingStreak({ visible, onClose }: SpendingStreakProps
     return "Every day counts! Log your expenses to build momentum! 🚀";
   };
 
-  const renderStreakStats = () => {
+  const renderStreakStats = useCallback(() => {
     if (!streakData) return null;
 
     return (
@@ -313,9 +329,9 @@ export default function SpendingStreak({ visible, onClose }: SpendingStreakProps
         </View>
       </View>
     );
-  };
+  }, [streakData, theme, styles, getStreakEmoji, getStreakLevel]);
 
-  const renderWeeklyProgress = () => {
+  const renderWeeklyProgress = useCallback(() => {
     if (!streakData) return null;
 
     const dayLabels = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
@@ -336,9 +352,9 @@ export default function SpendingStreak({ visible, onClose }: SpendingStreakProps
         </View>
       </View>
     );
-  };
+  }, [streakData, theme, styles]);
 
-  const renderCalendar = () => {
+  const renderCalendar = useCallback(() => {
     const monthNames = [
       'January', 'February', 'March', 'April', 'May', 'June',
       'July', 'August', 'September', 'October', 'November', 'December'
@@ -405,9 +421,9 @@ export default function SpendingStreak({ visible, onClose }: SpendingStreakProps
         </View>
       </View>
     );
-  };
+  }, [calendarDays, selectedMonth, theme, styles]);
 
-  const renderMotivation = () => {
+  const renderMotivation = useCallback(() => {
     if (!streakData) return null;
 
     return (
@@ -418,7 +434,7 @@ export default function SpendingStreak({ visible, onClose }: SpendingStreakProps
         </Text>
       </View>
     );
-  };
+  }, [streakData, theme, styles, getMotivationalMessage]);
 
   if (!visible) return null;
 

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   StyleSheet,
   View,
@@ -55,7 +55,7 @@ export default function BudgetComparison({ visible, onClose }: BudgetComparisonP
     }
   }, [visible, selectedPeriod]);
 
-  const loadBudgetData = async () => {
+  const loadBudgetData = useCallback(async () => {
     setLoading(true);
     try {
       const [budgetsData, expensesData, categoriesData] = await Promise.all([
@@ -74,9 +74,9 @@ export default function BudgetComparison({ visible, onClose }: BudgetComparisonP
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  const generateBudgetAnalyses = (budgets: Budget[], expenses: Expense[], categories: ExpenseCategory[]) => {
+  const generateBudgetAnalyses = useCallback((budgets: Budget[], expenses: Expense[], categories: ExpenseCategory[]) => {
     const activeBudgets = budgets.filter(budget => budget.isActive);
     const analyses: BudgetAnalysis[] = [];
 
@@ -87,10 +87,13 @@ export default function BudgetComparison({ visible, onClose }: BudgetComparisonP
       }
     });
 
-    // Sort by percentage used (highest first)
-    analyses.sort((a, b) => b.percentage - a.percentage);
     setBudgetAnalyses(analyses);
-  };
+  }, []);
+
+  // Memoized budget analyses to prevent unnecessary recalculations
+  const memoizedBudgetAnalyses = useMemo(() => {
+    return budgetAnalyses;
+  }, [budgetAnalyses]);
 
   const calculateBudgetAnalysis = (budget: Budget, expenses: Expense[], categories: ExpenseCategory[]): BudgetAnalysis | null => {
     const now = new Date();

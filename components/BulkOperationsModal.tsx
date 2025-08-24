@@ -93,14 +93,14 @@ export default function BulkOperationsModal({
     }
   }, [visible]);
 
-  const loadCategories = async () => {
+  const loadCategories = useCallback(async () => {
     try {
       const loadedCategories = await StorageService.getCategories();
       setCategories(loadedCategories);
     } catch (error) {
       console.error('Error loading categories:', error);
     }
-  };
+  }, []);
 
   const toggleExpenseSelection = useCallback((expenseId: string) => {
     triggerLightHaptic();
@@ -126,7 +126,7 @@ export default function BulkOperationsModal({
     setSelectedExpenses(new Set());
   }, [triggerLightHaptic]);
 
-  const handleBulkDelete = async () => {
+  const handleBulkDelete = useCallback(async () => {
     if (selectedExpenses.size === 0) return;
 
     Alert.alert(
@@ -153,26 +153,20 @@ export default function BulkOperationsModal({
             } finally {
               setLoading(false);
             }
-          }
-        }
+          },
+        },
       ]
     );
-  };
+  }, [selectedExpenses, onExpensesUpdated, triggerSuccessHaptic, triggerErrorHaptic]);
 
-  const handleBulkUpdateCategory = async () => {
+  const handleBulkUpdateCategory = useCallback(async () => {
     if (selectedExpenses.size === 0 || !bulkUpdateForm.categoryId) return;
-
-    const selectedCategory = categories.find(cat => cat.id === bulkUpdateForm.categoryId);
-    if (!selectedCategory) {
-      Alert.alert('Error', 'Please select a valid category');
-      return;
-    }
 
     setLoading(true);
     try {
       await StorageService.bulkUpdateExpenseCategory(
         Array.from(selectedExpenses),
-        selectedCategory
+        categories.find(cat => cat.id === bulkUpdateForm.categoryId)!
       );
       triggerSuccessHaptic();
       onExpensesUpdated();
@@ -182,21 +176,21 @@ export default function BulkOperationsModal({
       Alert.alert('Success', `Category updated for ${selectedExpenses.size} expense${selectedExpenses.size > 1 ? 's' : ''}!`);
     } catch (error) {
       triggerErrorHaptic();
-      console.error('Error updating categories:', error);
+      console.error('Error updating expense categories:', error);
       Alert.alert('Error', 'Failed to update categories. Please try again.');
     } finally {
       setLoading(false);
     }
-  };
+  }, [selectedExpenses, bulkUpdateForm.categoryId, categories, onExpensesUpdated, triggerSuccessHaptic, triggerErrorHaptic]);
 
-  const handleBulkUpdateNote = async () => {
-    if (selectedExpenses.size === 0) return;
+  const handleBulkUpdateNote = useCallback(async () => {
+    if (selectedExpenses.size === 0 || !bulkUpdateForm.note.trim()) return;
 
     setLoading(true);
     try {
       await StorageService.bulkUpdateExpenseNote(
         Array.from(selectedExpenses),
-        bulkUpdateForm.note.trim(),
+        bulkUpdateForm.note,
         bulkUpdateForm.addToNote
       );
       triggerSuccessHaptic();
@@ -204,25 +198,25 @@ export default function BulkOperationsModal({
       setSelectedExpenses(new Set());
       setBulkAction(null);
       setBulkUpdateForm({ categoryId: '', note: '', addToNote: false });
-      Alert.alert('Success', `Notes updated for ${selectedExpenses.size} expense${selectedExpenses.size > 1 ? 's' : ''}!`);
+      Alert.alert('Success', `Note updated for ${selectedExpenses.size} expense${selectedExpenses.size > 1 ? 's' : ''}!`);
     } catch (error) {
       triggerErrorHaptic();
-      console.error('Error updating notes:', error);
+      console.error('Error updating expense notes:', error);
       Alert.alert('Error', 'Failed to update notes. Please try again.');
     } finally {
       setLoading(false);
     }
-  };
+  }, [selectedExpenses, bulkUpdateForm, onExpensesUpdated, triggerSuccessHaptic, triggerErrorHaptic]);
 
-  const handleBulkExport = async () => {
+  const handleExportSelected = useCallback(async () => {
     if (selectedExpenses.size === 0) return;
 
     setLoading(true);
     try {
-      const selectedExpenseData = filteredExpenses.filter(exp => selectedExpenses.has(exp.id));
-      await StorageService.exportSelectedExpenses(selectedExpenseData);
+      const selectedExpensesData = expenses.filter(exp => selectedExpenses.has(exp.id));
+      await StorageService.exportSelectedExpenses(selectedExpensesData);
       triggerSuccessHaptic();
-      Alert.alert('Success', `Exported ${selectedExpenses.size} expense${selectedExpenses.size > 1 ? 's' : ''} successfully!`);
+      Alert.alert('Success', 'Selected expenses exported successfully!');
     } catch (error) {
       triggerErrorHaptic();
       console.error('Error exporting expenses:', error);
@@ -230,7 +224,25 @@ export default function BulkOperationsModal({
     } finally {
       setLoading(false);
     }
-  };
+  }, [selectedExpenses, expenses, triggerSuccessHaptic, triggerErrorHaptic]);
+
+  const handleBulkExport = useCallback(async () => {
+    if (selectedExpenses.size === 0) return;
+
+    setLoading(true);
+    try {
+      const selectedExpensesData = expenses.filter(exp => selectedExpenses.has(exp.id));
+      await StorageService.exportSelectedExpenses(selectedExpensesData);
+      triggerSuccessHaptic();
+      Alert.alert('Success', 'Selected expenses exported successfully!');
+    } catch (error) {
+      triggerErrorHaptic();
+      console.error('Error exporting expenses:', error);
+      Alert.alert('Error', 'Failed to export expenses. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  }, [selectedExpenses, expenses, triggerSuccessHaptic, triggerErrorHaptic]);
 
   const renderExpenseItem = useCallback(({ item: expense }: { item: Expense }) => {
     const isSelected = selectedExpenses.has(expense.id);
@@ -239,47 +251,34 @@ export default function BulkOperationsModal({
       <TouchableOpacity
         style={[styles.expenseItem, isSelected && styles.expenseItemSelected]}
         onPress={() => toggleExpenseSelection(expense.id)}
-        activeOpacity={0.7}
+        activeOpacity={0.8}
       >
-        <View style={styles.selectionIndicator}>
-          <View style={[
-            styles.checkbox,
-            isSelected && styles.checkboxSelected
-          ]}>
-            {isSelected && (
-              <MaterialIcons name="check" size={16} color={theme.surface} />
+        <View style={styles.expenseLeft}>
+          <View style={[styles.categoryIcon, { backgroundColor: expense.category.color }]}>
+            <Text style={styles.categoryEmoji}>{expense.category.emoji}</Text>
+          </View>
+          <View style={styles.expenseDetails}>
+            <Text style={styles.expenseDescription} numberOfLines={1}>
+              {expense.description}
+            </Text>
+            <Text style={styles.expenseCategory}>
+              {expense.category.name} • {formatDateShort(expense.date)}
+            </Text>
+            {expense.note && (
+              <Text style={styles.expenseNote} numberOfLines={1}>
+                {expense.note}
+              </Text>
             )}
           </View>
         </View>
-        
-        <View style={styles.expenseContent}>
-          <View style={styles.expenseLeft}>
-            <View style={[styles.categoryIcon, { backgroundColor: expense.category.color }]}>
-              <Text style={styles.categoryEmoji}>{expense.category.emoji}</Text>
-            </View>
-            <View style={styles.expenseDetails}>
-              <Text style={styles.expenseDescription} numberOfLines={1}>
-                {expense.description}
-              </Text>
-              <Text style={styles.expenseCategory}>
-                {expense.category.name} • {formatDateShort(expense.date)}
-              </Text>
-              {expense.note && (
-                <Text style={styles.expenseNote} numberOfLines={1}>
-                  {expense.note}
-                </Text>
-              )}
-            </View>
-          </View>
-          <Text style={styles.expenseAmount}>
-            {formatCurrency(expense.amount)}
-          </Text>
-        </View>
+        <Text style={styles.expenseAmount}>
+          {formatCurrency(expense.amount)}
+        </Text>
       </TouchableOpacity>
     );
-  }, [selectedExpenses, toggleExpenseSelection, theme, styles]);
+  }, [selectedExpenses, toggleExpenseSelection, styles]);
 
-  const renderBulkActionPanel = () => {
+  const renderBulkActionPanel = useCallback(() => {
     if (!bulkAction) return null;
 
     switch (bulkAction) {
@@ -418,7 +417,7 @@ export default function BulkOperationsModal({
       default:
         return null;
     }
-  };
+  }, [bulkAction, selectedExpenses.size, categories, bulkUpdateForm, theme, styles, triggerLightHaptic, handleBulkUpdateCategory, handleBulkUpdateNote, loading]);
 
   return (
     <Modal

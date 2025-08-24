@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   StyleSheet,
   View,
@@ -35,6 +35,8 @@ interface SpendingTrend {
   averageAmount: number;
   trend: 'up' | 'down' | 'stable';
   changePercentage: number;
+  highestDay?: TrendDataPoint | null;
+  lowestDay?: TrendDataPoint | null;
 }
 
 interface EnhancedAnalyticsProps {
@@ -59,7 +61,7 @@ export default function EnhancedAnalytics({ visible, onClose }: EnhancedAnalytic
     }
   }, [visible, selectedPeriod]);
 
-  const loadAnalyticsData = async () => {
+  const loadAnalyticsData = useCallback(async () => {
     setLoading(true);
     try {
       const [expensesData, categoriesData] = await Promise.all([
@@ -77,15 +79,15 @@ export default function EnhancedAnalytics({ visible, onClose }: EnhancedAnalytic
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  const onRefresh = async () => {
+  const onRefresh = useCallback(async () => {
     setRefreshing(true);
     await loadAnalyticsData();
     setRefreshing(false);
-  };
+  }, [loadAnalyticsData]);
 
-  const generateTrendAnalysis = (expensesData: Expense[]) => {
+  const generateTrendAnalysis = useCallback((expensesData: Expense[]) => {
     const now = new Date();
     const daysToShow = selectedPeriod === '7days' ? 7 : selectedPeriod === '30days' ? 30 : 90;
     
@@ -107,9 +109,9 @@ export default function EnhancedAnalytics({ visible, onClose }: EnhancedAnalytic
     } else {
       setWeeklyTrend(null);
     }
-  };
+  }, [selectedPeriod]);
 
-  const generateDailyTrend = (expenses: Expense[], days: number): SpendingTrend => {
+  const generateDailyTrend = useCallback((expenses: Expense[], days: number): SpendingTrend => {
     const dailyAmounts = new Map<string, number>();
     const now = new Date();
 
@@ -124,95 +126,114 @@ export default function EnhancedAnalytics({ visible, onClose }: EnhancedAnalytic
     // Sum expenses by day
     expenses.forEach(expense => {
       const dateStr = expense.date.split('T')[0];
-      const current = dailyAmounts.get(dateStr) || 0;
-      dailyAmounts.set(dateStr, current + expense.amount);
+      if (dailyAmounts.has(dateStr)) {
+        const current = dailyAmounts.get(dateStr) || 0;
+        dailyAmounts.set(dateStr, current + expense.amount);
+      }
     });
 
-    // Convert to data points
-    const data: TrendDataPoint[] = Array.from(dailyAmounts.entries()).map(([date, amount]) => {
-      const dateObj = new Date(date);
-      return {
+    // Convert to array and sort by date
+    const trendData = Array.from(dailyAmounts.entries())
+      .map(([date, amount]) => ({
         date,
         amount,
-        label: days <= 7 ? dateObj.toLocaleDateString('en-US', { weekday: 'short' }) : 
-               days <= 30 ? `${dateObj.getDate()}` : 
-               dateObj.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
-        dayOfWeek: dateObj.toLocaleDateString('en-US', { weekday: 'short' })
-      };
-    });
+        label: formatDateShort(new Date(date))
+      }))
+      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
-    const totalAmount = Array.from(dailyAmounts.values()).reduce((sum, amount) => sum + amount, 0);
-    const averageAmount = totalAmount / days;
+    // Calculate additional metrics
+    const totalAmount = trendData.reduce((sum, day) => sum + day.amount, 0);
+    const averageAmount = trendData.length > 0 ? totalAmount / trendData.length : 0;
     
-    // Calculate trend
-    const firstHalf = data.slice(0, Math.floor(data.length / 2));
-    const secondHalf = data.slice(Math.floor(data.length / 2));
-    const firstHalfAvg = firstHalf.reduce((sum, d) => sum + d.amount, 0) / firstHalf.length;
-    const secondHalfAvg = secondHalf.reduce((sum, d) => sum + d.amount, 0) / secondHalf.length;
-    
-    let trend: 'up' | 'down' | 'stable' = 'stable';
-    let changePercentage = 0;
-    
-    if (firstHalfAvg > 0) {
-      changePercentage = ((secondHalfAvg - firstHalfAvg) / firstHalfAvg) * 100;
-      if (Math.abs(changePercentage) > 10) {
-        trend = changePercentage > 0 ? 'up' : 'down';
-      }
-    }
+    // Find highest and lowest spending days
+    const highestDay = trendData.reduce((max, day) => day.amount > max.amount ? day : max, 
+      { date: '', amount: 0, label: '' });
+    const lowestDay = trendData.reduce((min, day) => day.amount < min.amount ? day : min, 
+      { date: '', amount: Infinity, label: '' });
+
+    // Calculate trend and change percentage (simplified implementation)
+    const firstHalfTotal = trendData.slice(0, Math.floor(trendData.length / 2)).reduce((sum, day) => sum + day.amount, 0);
+    const secondHalfTotal = trendData.slice(Math.floor(trendData.length / 2)).reduce((sum, day) => sum + day.amount, 0);
+    const changePercentage = firstHalfTotal > 0 ? ((secondHalfTotal - firstHalfTotal) / firstHalfTotal) * 100 : 0;
+    const trend = changePercentage > 5 ? 'up' : changePercentage < -5 ? 'down' : 'stable';
 
     return {
       period: 'daily',
-      data,
+      data: trendData,
       totalAmount,
       averageAmount,
       trend,
-      changePercentage: Math.abs(changePercentage)
+      changePercentage: Math.abs(changePercentage),
+      highestDay: highestDay.amount > 0 ? highestDay : null,
+      lowestDay: isFinite(lowestDay.amount) && lowestDay.amount !== Infinity ? lowestDay : null
     };
-  };
+  }, []);
 
-  const generateWeeklyTrend = (expenses: Expense[], weeks: number): SpendingTrend => {
+  const generateWeeklyTrend = useCallback((expenses: Expense[], weeks: number): SpendingTrend => {
     const weeklyAmounts = new Map<string, number>();
     const now = new Date();
 
-    // Initialize weeks
+    // Initialize all weeks with 0
     for (let i = weeks - 1; i >= 0; i--) {
-      const startOfWeek = new Date(now);
-      startOfWeek.setDate(now.getDate() - (now.getDay() + i * 7));
-      const weekStr = `Week ${weeks - i}`;
-      weeklyAmounts.set(weekStr, 0);
+      const weekStart = new Date(now);
+      weekStart.setDate(now.getDate() - (now.getDay() + i * 7));
+      const weekKey = `${weekStart.getFullYear()}-W${Math.ceil(weekStart.getDate() / 7)}`;
+      weeklyAmounts.set(weekKey, 0);
     }
 
     // Sum expenses by week
     expenses.forEach(expense => {
       const expenseDate = new Date(expense.date);
-      const weeksAgo = Math.floor((now.getTime() - expenseDate.getTime()) / (1000 * 3600 * 24 * 7));
-      if (weeksAgo < weeks) {
-        const weekStr = `Week ${weeks - weeksAgo}`;
-        const current = weeklyAmounts.get(weekStr) || 0;
-        weeklyAmounts.set(weekStr, current + expense.amount);
+      const weekStart = new Date(expenseDate);
+      weekStart.setDate(expenseDate.getDate() - expenseDate.getDay());
+      const weekKey = `${weekStart.getFullYear()}-W${Math.ceil(weekStart.getDate() / 7)}`;
+      
+      if (weeklyAmounts.has(weekKey)) {
+        const current = weeklyAmounts.get(weekKey) || 0;
+        weeklyAmounts.set(weekKey, current + expense.amount);
       }
     });
 
-    const data: TrendDataPoint[] = Array.from(weeklyAmounts.entries()).map(([label, amount]) => ({
-      date: label,
-      amount,
-      label: label.replace('Week ', 'W')
-    }));
+    // Convert to array
+    const trendData = Array.from(weeklyAmounts.entries())
+      .map(([week, amount]) => ({
+        date: week,
+        amount,
+        label: week
+      }));
 
-    const totalAmount = Array.from(weeklyAmounts.values()).reduce((sum, amount) => sum + amount, 0);
-    const averageAmount = totalAmount / weeks;
+    // Calculate additional metrics
+    const totalAmount = trendData.reduce((sum, week) => sum + week.amount, 0);
+    const averageAmount = trendData.length > 0 ? totalAmount / trendData.length : 0;
+
+    // Calculate trend and change percentage (simplified implementation)
+    const firstHalfTotal = trendData.slice(0, Math.floor(trendData.length / 2)).reduce((sum, week) => sum + week.amount, 0);
+    const secondHalfTotal = trendData.slice(Math.floor(trendData.length / 2)).reduce((sum, week) => sum + week.amount, 0);
+    const changePercentage = firstHalfTotal > 0 ? ((secondHalfTotal - firstHalfTotal) / firstHalfTotal) * 100 : 0;
+    const trend = changePercentage > 5 ? 'up' : changePercentage < -5 ? 'down' : 'stable';
 
     return {
       period: 'weekly',
-      data,
+      data: trendData,
       totalAmount,
       averageAmount,
-      trend: 'stable',
-      changePercentage: 0
+      trend,
+      changePercentage: Math.abs(changePercentage),
+      highestDay: null,
+      lowestDay: null
     };
-  };
+  }, []);
 
-  const renderLineChart = (trendData: SpendingTrend) => {
+  // Memoized trend data to prevent unnecessary recalculations
+  const memoizedDailyTrend = useMemo(() => {
+    return dailyTrend;
+  }, [dailyTrend]);
+
+  const memoizedWeeklyTrend = useMemo(() => {
+    return weeklyTrend;
+  }, [weeklyTrend]);
+
+  const renderLineChart = useCallback((trendData: SpendingTrend) => {
     if (!trendData || trendData.data.length === 0) return null;
 
     const maxAmount = Math.max(...trendData.data.map(d => d.amount));
@@ -306,9 +327,9 @@ export default function EnhancedAnalytics({ visible, onClose }: EnhancedAnalytic
         </View>
       </View>
     );
-  };
+  }, [chartWidth, chartHeight, styles, theme]);
 
-  const renderTrendInsights = (trendData: SpendingTrend) => {
+  const renderTrendInsights = useCallback((trendData: SpendingTrend) => {
     if (!trendData) return null;
 
     const insights = [];
@@ -334,14 +355,15 @@ export default function EnhancedAnalytics({ visible, onClose }: EnhancedAnalytic
     }
 
     // Highest spending day
-    const maxDay = trendData.data.reduce((max, day) => day.amount > max.amount ? day : max);
+    const maxDay = trendData.data.reduce((max, day) => day.amount > max.amount ? day : max, 
+      { date: '', amount: 0, label: '' });
     if (maxDay.amount > 0) {
       insights.push({
         icon: 'star',
         color: theme.orange,
         title: 'Highest Day',
         value: formatCurrency(maxDay.amount),
-        description: `On ${maxDay.dayOfWeek || maxDay.label}`
+        description: `On ${maxDay.label}`
       });
     }
 
@@ -364,9 +386,9 @@ export default function EnhancedAnalytics({ visible, onClose }: EnhancedAnalytic
         ))}
       </View>
     );
-  };
+  }, [selectedPeriod, theme, styles]);
 
-  const renderPeriodSelector = () => {
+  const renderPeriodSelector = useCallback(() => {
     const periods = [
       { key: '7days' as const, label: '7 Days' },
       { key: '30days' as const, label: '30 Days' },
@@ -396,7 +418,7 @@ export default function EnhancedAnalytics({ visible, onClose }: EnhancedAnalytic
         ))}
       </View>
     );
-  };
+  }, [selectedPeriod, styles]);
 
   if (!visible) return null;
 

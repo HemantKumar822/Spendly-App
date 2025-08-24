@@ -1,4 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as FileSystem from 'expo-file-system';
+import * as Sharing from 'expo-sharing';
 import { Expense, Budget, ExpenseCategory, AIInsight } from '../types';
 import { DEFAULT_CATEGORIES } from '../types/categories';
 import { SampleDataGenerator } from '../utils/sampleData';
@@ -469,14 +471,14 @@ export class StorageService {
         expenseCount: expenses.length
       };
       
-      // For now, just log the data (in real app, would use expo-file-system and expo-sharing)
-      console.log('📄 Selected expenses export data:', JSON.stringify(exportData, null, 2));
+      // Create a proper export with file system and sharing
+      const fileName = `spendly-selected-expenses-${Date.now()}.json`;
+      const fileContent = JSON.stringify(exportData, null, 2);
       
-      // In a real implementation:
-      // const fileName = `spendly-selected-expenses-${Date.now()}.json`;
-      // const fileUri = FileSystem.documentDirectory + fileName;
-      // await FileSystem.writeAsStringAsync(fileUri, JSON.stringify(exportData, null, 2));
-      // await Sharing.shareAsync(fileUri);
+      // Write file to file system and share it
+      const fileUri = FileSystem.documentDirectory + fileName;
+      await FileSystem.writeAsStringAsync(fileUri, fileContent);
+      await Sharing.shareAsync(fileUri);
       
     } catch (error) {
       const appError = ErrorHandler.storageError(
@@ -594,15 +596,8 @@ export class StorageService {
   // Onboarding and first launch methods
   static async isFirstLaunch(): Promise<boolean> {
     try {
-      // FOR TESTING PURPOSES: Always return true to show welcome screen
-      // Uncomment the following lines to restore normal behavior
-      /*
       const isFirstLaunch = await AsyncStorage.getItem(STORAGE_KEYS.FIRST_LAUNCH);
       return isFirstLaunch === null;
-      */
-      
-      // FOR TESTING: Always return true
-      return true;
     } catch (error) {
       console.error('Error checking first launch:', error);
       return true;
@@ -611,14 +606,7 @@ export class StorageService {
 
   static async setFirstLaunchCompleted(): Promise<void> {
     try {
-      // FOR TESTING PURPOSES: Don't actually set first launch completed
-      // Uncomment the following lines to restore normal behavior
-      /*
       await AsyncStorage.setItem(STORAGE_KEYS.FIRST_LAUNCH, 'false');
-      */
-      
-      // FOR TESTING: Do nothing
-      console.log('First launch completed (but not actually saved for testing)');
     } catch (error) {
       console.error('Error setting first launch completed:', error);
       throw error;
@@ -627,15 +615,8 @@ export class StorageService {
 
   static async isOnboardingCompleted(): Promise<boolean> {
     try {
-      // FOR TESTING PURPOSES: Always return false to show onboarding
-      // Uncomment the following lines to restore normal behavior
-      /*
       const completed = await AsyncStorage.getItem(STORAGE_KEYS.ONBOARDING_COMPLETED);
       return completed === 'true';
-      */
-      
-      // FOR TESTING: Always return false
-      return false;
     } catch (error) {
       console.error('Error checking onboarding status:', error);
       return false;
@@ -644,14 +625,7 @@ export class StorageService {
 
   static async setOnboardingCompleted(): Promise<void> {
     try {
-      // FOR TESTING PURPOSES: Don't actually set onboarding completed
-      // Uncomment the following lines to restore normal behavior
-      /*
       await AsyncStorage.setItem(STORAGE_KEYS.ONBOARDING_COMPLETED, 'true');
-      */
-      
-      // FOR TESTING: Do nothing
-      console.log('Onboarding completed (but not actually saved for testing)');
     } catch (error) {
       console.error('Error setting onboarding completed:', error);
       throw error;
@@ -660,16 +634,12 @@ export class StorageService {
 
   static async populateSampleData(): Promise<void> {
     try {
-      // FOR TESTING PURPOSES: Always populate sample data
-      // Uncomment the following lines to restore normal behavior
-      /*
       const sampleDataAdded = await AsyncStorage.getItem(STORAGE_KEYS.SAMPLE_DATA_ADDED);
       
       if (sampleDataAdded === 'true') {
         console.log('Sample data already added, skipping...');
         return;
       }
-      */
 
       // Generate and save sample data
       const sampleExpenses = SampleDataGenerator.generateSampleExpenses();
@@ -691,22 +661,11 @@ export class StorageService {
         await this.saveInsight(insight);
       }
 
-      // FOR TESTING: Don't mark sample data as added so it runs every time
-      // Uncomment the following line to restore normal behavior
-      // await AsyncStorage.setItem(STORAGE_KEYS.SAMPLE_DATA_ADDED, 'true');
+      await AsyncStorage.setItem(STORAGE_KEYS.SAMPLE_DATA_ADDED, 'true');
       
       console.log('✅ Sample data populated successfully!');
     } catch (error) {
       console.error('Error populating sample data:', error);
-      throw error;
-    }
-  }
-
-  static async clearSampleDataFlag(): Promise<void> {
-    try {
-      await AsyncStorage.removeItem(STORAGE_KEYS.SAMPLE_DATA_ADDED);
-    } catch (error) {
-      console.error('Error clearing sample data flag:', error);
       throw error;
     }
   }

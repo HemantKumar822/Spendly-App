@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, memo } from 'react';
 import { View, StyleSheet, ActivityIndicator } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { StorageService } from '@/services/storage';
@@ -24,17 +24,11 @@ function AppContent({ children }: AppWrapperProps) {
     initializeApp();
   }, []);
 
-  const initializeApp = async () => {
+  const initializeApp = useCallback(async () => {
     try {
       // Initialize storage
       await StorageService.initializeApp();
       
-      // FOR TESTING PURPOSES: Always show onboarding
-      // Comment out the following line to revert to normal behavior
-      setShowWelcome(true);
-      
-      // Uncomment the following lines to restore normal behavior
-      /*
       // Check if this is first launch
       const isFirstLaunch = await StorageService.isFirstLaunch();
       const onboardingCompleted = await StorageService.isOnboardingCompleted();
@@ -49,41 +43,30 @@ function AppContent({ children }: AppWrapperProps) {
           setShowGoalSetting(true);
         }
       }
-      */
       
     } catch (error) {
       console.error('Error initializing app:', error);
     } finally {
       setIsLoading(false);
     }
-  };
+  }, []);
 
-  const handleWelcomeStart = () => {
+  const handleWelcomeStart = useCallback(() => {
     setShowWelcome(false);
     setShowOnboarding(true);
-  };
+  }, []);
 
-  const handleOnboardingComplete = async () => {
+  const handleOnboardingComplete = useCallback(async () => {
     try {
-      // FOR TESTING PURPOSES: Don't mark onboarding as completed
-      // Uncomment the following lines to restore normal behavior
-      /*
       // Mark onboarding as completed
       await StorageService.setOnboardingCompleted();
       await StorageService.setFirstLaunchCompleted();
       
       // Populate with sample data
       await StorageService.populateSampleData();
-      */
       
       setShowOnboarding(false);
       
-      // FOR TESTING PURPOSES: Always show goal setting after onboarding
-      // Comment out the following lines to revert to normal behavior
-      setShowGoalSetting(true);
-      
-      // Uncomment the following lines to restore normal behavior
-      /*
       // Check if we need to show goal setting
       const goalSettingCompleted = await StorageService.isGoalSettingCompleted();
       const existingBudgets = await StorageService.getBudgets();
@@ -91,14 +74,13 @@ function AppContent({ children }: AppWrapperProps) {
       if (!goalSettingCompleted && existingBudgets.length === 0) {
         setShowGoalSetting(true);
       }
-      */
     } catch (error) {
       console.error('Error completing onboarding:', error);
       setShowOnboarding(false);
     }
-  };
+  }, []);
 
-  const handleGoalSettingComplete = async (budgets: Budget[]) => {
+  const handleGoalSettingComplete = useCallback(async (budgets: Budget[]) => {
     try {
       console.log('Goal setting completed with budgets:', budgets.length);
       setShowGoalSetting(false);
@@ -106,7 +88,7 @@ function AppContent({ children }: AppWrapperProps) {
       console.error('Error completing goal setting:', error);
       setShowGoalSetting(false);
     }
-  };
+  }, []);
 
   if (isLoading) {
     return (
@@ -166,7 +148,7 @@ function AppContent({ children }: AppWrapperProps) {
   );
 }
 
-export default function AppWrapper({ children }: AppWrapperProps) {
+export default memo(function AppWrapper({ children }: AppWrapperProps) {
   return (
     <ErrorBoundary
       showDetails={__DEV__} // Show error details in development
@@ -181,7 +163,7 @@ export default function AppWrapper({ children }: AppWrapperProps) {
       </ThemeProvider>
     </ErrorBoundary>
   );
-}
+});
 
 const styles = StyleSheet.create({
   loadingContainer: {

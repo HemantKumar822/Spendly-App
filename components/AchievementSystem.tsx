@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import {
   StyleSheet,
   View,
@@ -205,171 +205,220 @@ export default function AchievementSystem({ visible, onClose }: AchievementSyste
   const [loading, setLoading] = useState(true);
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
   const [newlyUnlocked, setNewlyUnlocked] = useState<Achievement[]>([]);
+  const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [budgets, setBudgets] = useState<Budget[]>([]);
+  const [savedAchievements, setSavedAchievements] = useState<Achievement[]>([]);
 
   useEffect(() => {
     if (visible) {
-      loadAchievements();
+      loadAchievementData();
     }
   }, [visible]);
 
-  const loadAchievements = async () => {
+  const loadAchievementData = useCallback(async () => {
     setLoading(true);
     try {
       const [expenses, budgets, savedAchievements] = await Promise.all([
         StorageService.getExpenses(),
         StorageService.getBudgets(),
-        StorageService.getAchievements().catch(() => [])
+        StorageService.getAchievements()
       ]);
-
-      const calculatedAchievements = await calculateAchievements(expenses, budgets, savedAchievements);
-      setAchievements(calculatedAchievements);
-
-      // Check for newly unlocked achievements
-      const newlyUnlockedAchievements = calculatedAchievements.filter(
-        achievement => achievement.isUnlocked && 
-        !savedAchievements.find(saved => saved.id === achievement.id && saved.isUnlocked)
-      );
       
-      if (newlyUnlockedAchievements.length > 0) {
-        setNewlyUnlocked(newlyUnlockedAchievements);
-        // Save updated achievements
-        await StorageService.saveAchievements(calculatedAchievements);
-      }
+      setExpenses(expenses);
+      setBudgets(budgets);
+      setSavedAchievements(savedAchievements);
+      
+      // Calculate achievements progress
+      const updatedAchievements = calculateAchievementsProgress(expenses, budgets, savedAchievements);
+      setAchievements(updatedAchievements);
     } catch (error) {
-      console.error('Error loading achievements:', error);
+      console.error('Error loading achievement data:', error);
     } finally {
       setLoading(false);
     }
-  };
+  }, []);
 
-  const calculateAchievements = async (
+  const calculateAchievementsProgress = useCallback((
     expenses: Expense[], 
     budgets: Budget[], 
     savedAchievements: Achievement[]
-  ): Promise<Achievement[]> => {
-    const now = new Date();
-    
+  ): Achievement[] => {
+    // Create a map of unlocked achievements for quick lookup
+    const unlockedMap = new Map<string, Achievement>();
+    savedAchievements.forEach(ach => {
+      if (ach.isUnlocked) {
+        unlockedMap.set(ach.id, ach);
+      }
+    });
+
+    // Calculate progress for each achievement
     return ACHIEVEMENT_DEFINITIONS.map(definition => {
-      const saved = savedAchievements.find(a => a.id === definition.id);
-      let progress = 0;
-      let isUnlocked = saved?.isUnlocked || false;
-      let unlockedAt = saved?.unlockedAt;
+      const unlocked = unlockedMap.get(definition.id);
+      
+      // If already unlocked, return the saved achievement
+      if (unlocked) {
+        return unlocked;
+      }
 
       // Calculate progress based on achievement type
+      let progress = 0;
+      
       switch (definition.id) {
         case 'first_expense':
           progress = expenses.length > 0 ? 100 : 0;
           break;
-
+          
         case 'expense_streak_7':
         case 'expense_streak_30':
         case 'expense_streak_100':
-          const requiredDays = parseInt(definition.id.split('_')[2]);
-          const streak = calculateExpenseStreak(expenses);
-          progress = Math.min((streak / requiredDays) * 100, 100);
+          const streak = calculateStreak(expenses);
+          const requiredDays = definition.id === 'expense_streak_7' ? 7 : 
+                              definition.id === 'expense_streak_30' ? 30 : 100;
+          progress = Math.min(100, (streak.currentStreak / requiredDays) * 100);
           break;
-
+          
         case 'first_budget':
           progress = budgets.length > 0 ? 100 : 0;
           break;
-
+          
         case 'budget_success_1':
         case 'budget_success_3':
-          const successMonths = parseInt(definition.id.split('_')[2]);
-          const monthsInBudget = calculateBudgetSuccessMonths(expenses, budgets);
-          progress = Math.min((monthsInBudget / successMonths) * 100, 100);
+          const successMonths = calculateBudgetSuccessMonths(budgets, expenses, 
+            definition.id === 'budget_success_3' ? 3 : 1);
+          progress = Math.min(100, (successMonths / (definition.id === 'budget_success_3' ? 3 : 1)) * 100);
           break;
-
+          
         case 'savings_hero':
-          progress = calculateSavingsHeroProgress(expenses, budgets);
+          const savingsProgress = calculateSavingsHeroProgress(expenses, budgets);
+          progress = savingsProgress;
           break;
-
+          
         case 'category_conscious':
-          const uniqueCategories = new Set(expenses.map(e => e.category.id)).size;
-          progress = Math.min((uniqueCategories / 5) * 100, 100);
+          const categoriesUsed = new Set(expenses.map(e => e.category.id)).size;
+          progress = Math.min(100, (categoriesUsed / 5) * 100);
           break;
-
+          
         case 'detail_oriented':
-          const expensesWithNotes = expenses.filter(e => e.note && e.note.trim().length > 0).length;
-          progress = Math.min((expensesWithNotes / 10) * 100, 100);
+          const expensesWithNotes = expenses.filter(e => e.note && e.note.trim()).length;
+          progress = Math.min(100, (expensesWithNotes / 10) * 100);
           break;
-
+          
         case 'ai_adopter':
-          // This would require tracking AI usage - for now, assume manual categorization = 0 AI usage
-          progress = 0; // This would be implemented based on actual AI usage tracking
-          break;
-
-        case 'expense_100':
-          progress = Math.min((expenses.length / 100) * 100, 100);
-          break;
-
-        case 'expense_500':
-          progress = Math.min((expenses.length / 500) * 100, 100);
-          break;
-
-        case 'big_spender':
-          const totalAmount = expenses.reduce((sum, e) => sum + e.amount, 0);
-          progress = Math.min((totalAmount / 10000) * 100, 100);
-          break;
-
-        case 'spending_analyzer':
-          // This would require tracking analytics usage - placeholder for now
+          // This would require tracking AI usage - for now we'll use a placeholder
           progress = 0;
           break;
-
+          
+        case 'expense_100':
+        case 'expense_500':
+          const requiredExpenses = definition.id === 'expense_100' ? 100 : 500;
+          progress = Math.min(100, (expenses.length / requiredExpenses) * 100);
+          break;
+          
+        case 'big_spender':
+          const totalSpent = expenses.reduce((sum, exp) => sum + exp.amount, 0);
+          progress = Math.min(100, (totalSpent / 10000) * 100);
+          break;
+          
+        case 'spending_analyzer':
+          // This would require tracking analytics usage - for now we'll use a placeholder
+          progress = 0;
+          break;
+          
         default:
-          progress = saved?.progress || 0;
+          progress = 0;
       }
 
       // Check if achievement should be unlocked
-      if (!isUnlocked && progress >= 100) {
-        isUnlocked = true;
-        unlockedAt = now.toISOString();
-      }
-
+      const isUnlocked = progress >= 100;
+      
       return {
         ...definition,
         progress: Math.round(progress),
         isUnlocked,
-        unlockedAt
+        unlockedAt: isUnlocked ? new Date().toISOString() : undefined
       };
     });
-  };
+  }, []);
 
-  const calculateExpenseStreak = (expenses: Expense[]): number => {
-    if (expenses.length === 0) return 0;
-
-    const sortedExpenses = expenses.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-    const expenseDates = Array.from(new Set(sortedExpenses.map(e => e.date.split('T')[0])))
-      .sort((a, b) => new Date(b).getTime() - new Date(a).getTime());
-
-    let streak = 0;
+  const calculateStreak = useCallback((expenses: Expense[]) => {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
+    
+    // Get unique dates when expenses were logged
+    const expenseDates = Array.from(new Set(
+      expenses.map(expense => expense.date.split('T')[0])
+    )).sort((a, b) => new Date(b).getTime() - new Date(a).getTime());
 
-    for (let i = 0; i < expenseDates.length; i++) {
-      const expenseDate = new Date(expenseDates[i]);
-      const expectedDate = new Date(today);
-      expectedDate.setDate(today.getDate() - streak);
+    if (expenseDates.length === 0) {
+      return {
+        currentStreak: 0,
+        longestStreak: 0
+      };
+    }
 
-      if (expenseDate.toDateString() === expectedDate.toDateString()) {
-        streak++;
+    // Check if user logged today
+    const todayString = today.toISOString().split('T')[0];
+    const isActiveToday = expenseDates.includes(todayString);
+
+    // Calculate current streak
+    let currentStreak = 0;
+    const currentDate = new Date(today);
+    
+    // If not active today, start checking from yesterday
+    if (!isActiveToday) {
+      currentDate.setDate(currentDate.getDate() - 1);
+    }
+
+    while (true) {
+      const dateString = currentDate.toISOString().split('T')[0];
+      if (expenseDates.includes(dateString)) {
+        currentStreak++;
+        currentDate.setDate(currentDate.getDate() - 1);
       } else {
         break;
       }
     }
 
-    return streak;
-  };
+    // Calculate longest streak
+    let longestStreak = 0;
+    let tempStreak = 0;
+    let previousDate: Date | null = null;
 
-  const calculateBudgetSuccessMonths = (expenses: Expense[], budgets: Budget[]): number => {
+    for (const dateString of expenseDates.reverse()) {
+      const currentExpenseDate = new Date(dateString);
+      
+      if (previousDate === null) {
+        tempStreak = 1;
+      } else {
+        const daysDiff = Math.floor((currentExpenseDate.getTime() - previousDate.getTime()) / (1000 * 3600 * 24));
+        if (daysDiff === 1) {
+          tempStreak++;
+        } else {
+          longestStreak = Math.max(longestStreak, tempStreak);
+          tempStreak = 1;
+        }
+      }
+      previousDate = currentExpenseDate;
+    }
+    longestStreak = Math.max(longestStreak, tempStreak);
+
+    return {
+      currentStreak,
+      longestStreak
+    };
+  }, []);
+
+  const calculateBudgetSuccessMonths = useCallback((
+    budgets: Budget[], 
+    expenses: Expense[], 
+    requiredMonths: number
+  ): number => {
     if (budgets.length === 0) return 0;
 
     const now = new Date();
     let successMonths = 0;
 
-    // Check last 6 months
-    for (let i = 0; i < 6; i++) {
+    for (let i = 0; i < requiredMonths; i++) {
       const monthStart = new Date(now.getFullYear(), now.getMonth() - i, 1);
       const monthEnd = new Date(now.getFullYear(), now.getMonth() - i + 1, 0);
 
@@ -393,9 +442,12 @@ export default function AchievementSystem({ visible, onClose }: AchievementSyste
     }
 
     return successMonths;
-  };
+  }, []);
 
-  const calculateSavingsHeroProgress = (expenses: Expense[], budgets: Budget[]): number => {
+  const calculateSavingsHeroProgress = useCallback((
+    expenses: Expense[], 
+    budgets: Budget[]
+  ): number => {
     if (budgets.length === 0) return 0;
 
     const now = new Date();
@@ -413,11 +465,28 @@ export default function AchievementSystem({ visible, onClose }: AchievementSyste
       return sum + budget.amount;
     }, 0);
 
-    const usagePercentage = monthBudget > 0 ? (monthTotal / monthBudget) * 100 : 0;
-    
-    // Achievement unlocked if used 80% or less
-    return usagePercentage <= 80 ? 100 : 0;
-  };
+    // Calculate percentage of budget used (80% or less to unlock)
+    if (monthBudget > 0) {
+      const percentageUsed = (monthTotal / monthBudget) * 100;
+      // If using 80% or less, progress toward 100%
+      if (percentageUsed <= 80) {
+        // Map 0-80% to 0-100% progress
+        return Math.min(100, ((80 - percentageUsed) / 80) * 100);
+      }
+      return 0;
+    }
+
+    return 0;
+  }, []);
+
+  // Memoized achievements to prevent unnecessary recalculations
+  const memoizedAchievements = React.useMemo(() => {
+    return achievements;
+  }, [achievements]);
+
+  const memoizedSavedAchievements = React.useMemo(() => {
+    return savedAchievements;
+  }, [savedAchievements]);
 
   const getTierColor = (tier: Achievement['tier']) => {
     switch (tier) {
@@ -440,7 +509,7 @@ export default function AchievementSystem({ visible, onClose }: AchievementSyste
     }
   };
 
-  const renderAchievementCard = (achievement: Achievement) => {
+  const renderAchievementCard = useCallback((achievement: Achievement) => {
     const tierColor = getTierColor(achievement.tier);
     
     return (
@@ -505,9 +574,9 @@ export default function AchievementSystem({ visible, onClose }: AchievementSyste
         )}
       </View>
     );
-  };
+  }, [styles, getTierColor]);
 
-  const renderCategoryFilter = () => {
+  const renderCategoryFilter = useCallback(() => {
     const categories = [
       { key: 'all', label: 'All', icon: 'apps' },
       { key: 'spending', label: 'Spending', icon: 'payments' },
@@ -548,9 +617,9 @@ export default function AchievementSystem({ visible, onClose }: AchievementSyste
         ))}
       </ScrollView>
     );
-  };
+  }, [selectedCategory, theme, styles]);
 
-  const renderStats = () => {
+  const renderStats = useCallback(() => {
     const unlockedCount = achievements.filter(a => a.isUnlocked).length;
     const totalCount = achievements.length;
     const totalProgress = achievements.reduce((sum, a) => sum + a.progress, 0) / achievements.length;
@@ -575,7 +644,7 @@ export default function AchievementSystem({ visible, onClose }: AchievementSyste
         </View>
       </View>
     );
-  };
+  }, [achievements, styles]);
 
   const filteredAchievements = achievements.filter(achievement => 
     selectedCategory === 'all' || achievement.category === selectedCategory
