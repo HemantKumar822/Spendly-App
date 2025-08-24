@@ -23,6 +23,8 @@ import ResponsiveContainer, { ResponsiveTwoColumn, ResponsiveCardLayout } from '
 import { useResponsive, useResponsiveSpacing, useResponsiveTypography, useResponsiveIcons, useResponsiveLayout } from '@/hooks/useResponsive';
 import { useTheme, Theme } from '@/contexts/ThemeContext';
 import { useHaptics } from '@/hooks/useHaptics';
+import { useExpenseSubscription } from '@/hooks/useDataSubscription';
+import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth, isWithinInterval, parseISO } from 'date-fns';
 
 // Add state for showing different modals
 interface SummaryScreenState {
@@ -48,34 +50,6 @@ export default function SummaryScreen() {
   
   const chartWidth = 300;
 
-  // Memoized expensive calculations
-  const periodExpenses = useMemo(() => {
-    return expenses.filter(expense => {
-      const expenseDate = new Date(expense.date);
-      const now = new Date();
-      
-      switch (selectedPeriod) {
-        case 'today':
-          return expenseDate.toDateString() === now.toDateString();
-        case 'week':
-          const weekStart = new Date(now);
-          weekStart.setDate(now.getDate() - now.getDay());
-          return expenseDate >= weekStart;
-        case 'month':
-          return expenseDate.getMonth() === now.getMonth() && 
-                 expenseDate.getFullYear() === now.getFullYear();
-        default:
-          return true;
-      }
-    });
-  }, [expenses, selectedPeriod]);
-
-  const topExpensesList = useMemo(() => {
-    return periodExpenses
-      .sort((a, b) => b.amount - a.amount)
-      .slice(0, 5);
-  }, [periodExpenses]);
-
   const loadData = useCallback(async () => {
     try {
       const allExpenses = await StorageService.getExpenses();
@@ -90,6 +64,44 @@ export default function SummaryScreen() {
     }
   }, [selectedPeriod]);
 
+  // Subscribe to expense changes for automatic updates
+  useExpenseSubscription(useCallback(() => {
+    loadData();
+  }, [loadData]));
+
+  // Memoized expensive calculations
+  const periodExpenses = useMemo(() => {
+    const filtered = expenses.filter(expense => {
+      const expenseDate = parseISO(expense.date);
+      const now = new Date();
+      
+      switch (selectedPeriod) {
+        case 'today':
+          const startOfDay = new Date(now.setHours(0, 0, 0, 0));
+          const endOfDay = new Date(now.setHours(23, 59, 59, 999));
+          return expenseDate >= startOfDay && expenseDate <= endOfDay;
+        case 'week':
+          // Use the same logic as in utils file for consistency
+          const weekStart = startOfWeek(now, { weekStartsOn: 1 }); // Monday
+          const weekEnd = endOfWeek(now, { weekStartsOn: 1 }); // Sunday
+          return isWithinInterval(expenseDate, { start: weekStart, end: weekEnd });
+        case 'month':
+          const monthStart = startOfMonth(now);
+          const monthEnd = endOfMonth(now);
+          return isWithinInterval(expenseDate, { start: monthStart, end: monthEnd });
+        default:
+          return true;
+      }
+    });
+    return filtered;
+  }, [expenses, selectedPeriod]);
+
+  const topExpensesList = useMemo(() => {
+    return periodExpenses
+      .sort((a, b) => b.amount - a.amount)
+      .slice(0, 5);
+  }, [periodExpenses]);
+
   const onRefresh = useCallback(async () => {
     setRefreshing(true);
     await loadData();
@@ -98,7 +110,12 @@ export default function SummaryScreen() {
 
   useEffect(() => {
     loadData();
-  }, [selectedPeriod]);
+  }, [selectedPeriod]); // This is correct - load data when period changes
+
+  useEffect(() => {
+    // Load data when component mounts
+    loadData();
+  }, []); // Empty dependency array to run only once on mount
 
   const renderIntegratedPeriodSelector = () => {
     const periods: { key: Period; label: string }[] = [

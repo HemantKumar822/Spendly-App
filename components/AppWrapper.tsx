@@ -62,8 +62,8 @@ function AppContent({ children }: AppWrapperProps) {
       await StorageService.setOnboardingCompleted();
       await StorageService.setFirstLaunchCompleted();
       
-      // Populate with sample data
-      await StorageService.populateSampleData();
+      // DO NOT populate with sample data for new users as per requirements
+      // await StorageService.populateSampleData();
       
       setShowOnboarding(false);
       
@@ -71,6 +71,7 @@ function AppContent({ children }: AppWrapperProps) {
       const goalSettingCompleted = await StorageService.isGoalSettingCompleted();
       const existingBudgets = await StorageService.getBudgets();
       
+      // Show goal setting if not completed and no budgets exist
       if (!goalSettingCompleted && existingBudgets.length === 0) {
         setShowGoalSetting(true);
       }

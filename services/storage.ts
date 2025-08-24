@@ -5,6 +5,7 @@ import { Expense, Budget, ExpenseCategory, AIInsight } from '../types';
 import { DEFAULT_CATEGORIES } from '../types/categories';
 import { SampleDataGenerator } from '../utils/sampleData';
 import { ErrorHandler, ErrorType } from './errorHandler';
+import eventEmitter, { EVENT_TYPES } from './EventEmitter';
 import type { Achievement } from '../components/AchievementSystem';
 
 
@@ -70,11 +71,17 @@ export class StorageService {
       
       if (existingIndex >= 0) {
         expenses[existingIndex] = { ...expense, updatedAt: new Date().toISOString() };
+        // Emit event for expense update
+        eventEmitter.emit(EVENT_TYPES.EXPENSE_UPDATED, expense);
       } else {
         expenses.push(expense);
+        // Emit event for expense addition
+        eventEmitter.emit(EVENT_TYPES.EXPENSE_ADDED, expense);
       }
       
       await AsyncStorage.setItem(STORAGE_KEYS.EXPENSES, JSON.stringify(expenses));
+      // Emit general data change event
+      eventEmitter.emit(EVENT_TYPES.DATA_CHANGED);
     } catch (error) {
       const appError = ErrorHandler.storageError(
         'Failed to save expense',
@@ -90,6 +97,10 @@ export class StorageService {
       const expenses = await this.getExpenses();
       const filteredExpenses = expenses.filter(e => e.id !== expenseId);
       await AsyncStorage.setItem(STORAGE_KEYS.EXPENSES, JSON.stringify(filteredExpenses));
+      // Emit event for expense deletion
+      eventEmitter.emit(EVENT_TYPES.EXPENSE_DELETED, expenseId);
+      // Emit general data change event
+      eventEmitter.emit(EVENT_TYPES.DATA_CHANGED);
     } catch (error) {
       const appError = ErrorHandler.storageError(
         'Failed to delete expense',
@@ -198,11 +209,17 @@ export class StorageService {
       
       if (existingIndex >= 0) {
         budgets[existingIndex] = budget;
+        // Emit event for budget update
+        eventEmitter.emit(EVENT_TYPES.BUDGET_UPDATED, budget);
       } else {
         budgets.push(budget);
+        // Emit event for budget addition
+        eventEmitter.emit(EVENT_TYPES.BUDGET_ADDED, budget);
       }
       
       await AsyncStorage.setItem(STORAGE_KEYS.BUDGETS, JSON.stringify(budgets));
+      // Emit general data change event
+      eventEmitter.emit(EVENT_TYPES.DATA_CHANGED);
     } catch (error) {
       console.error('Error saving budget:', error);
       throw error;
@@ -214,6 +231,10 @@ export class StorageService {
       const budgets = await this.getBudgets();
       const filteredBudgets = budgets.filter(b => b.id !== budgetId);
       await AsyncStorage.setItem(STORAGE_KEYS.BUDGETS, JSON.stringify(filteredBudgets));
+      // Emit event for budget deletion
+      eventEmitter.emit(EVENT_TYPES.BUDGET_DELETED, budgetId);
+      // Emit general data change event
+      eventEmitter.emit(EVENT_TYPES.DATA_CHANGED);
     } catch (error) {
       console.error('Error deleting budget:', error);
       throw error;

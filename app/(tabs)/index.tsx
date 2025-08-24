@@ -14,6 +14,7 @@ import SpendingStreak from '@/components/SpendingStreak';
 import LevelSystem from '@/components/LevelSystem';
 import { useTheme, Theme } from '@/contexts/ThemeContext';
 import { useHaptics } from '@/hooks/useHaptics';
+import { useExpenseSubscription } from '@/hooks/useDataSubscription';
 import {
   SkeletonSummaryCard,
   SkeletonOverviewCard,
@@ -72,7 +73,9 @@ const OverviewCard = memo(({ weekSummary, theme }: {
         <MaterialIcons name="trending-up" size={20} color={theme.orange} />
         <Text style={getStyles(theme).overviewLabel}>Avg/Day</Text>
         <Text style={getStyles(theme).overviewValue}>
-          {formatCurrency((weekSummary?.totalAmount || 0) / 7)}
+          {formatCurrency(weekSummary?.totalAmount && weekSummary?.startDate && weekSummary?.endDate 
+            ? weekSummary.totalAmount / ((new Date(weekSummary.endDate).getTime() - new Date(weekSummary.startDate).getTime()) / (1000 * 60 * 60 * 24) + 1)
+            : 0)}
         </Text>
       </View>
     </View>
@@ -186,27 +189,6 @@ function DashboardScreen() {
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [aiInsights, setAiInsights] = useState<any[]>([]);
   const [refreshing, setRefreshing] = useState(false);
-
-  // Optimized memoized calculations for better performance
-  const { todayExpenses, weekExpenses, todaySummary, weekSummary } = useMemo(() => {
-    const today = new Date().toDateString();
-    const now = new Date();
-    const weekStart = new Date(now);
-    weekStart.setDate(now.getDate() - now.getDay());
-    
-    const todayExpenses = expenses.filter(expense => 
-      new Date(expense.date).toDateString() === today
-    );
-    
-    const weekExpenses = expenses.filter(expense => 
-      new Date(expense.date) >= weekStart
-    );
-    
-    const todaySummary = generateExpenseSummary(todayExpenses, 'today');
-    const weekSummary = generateExpenseSummary(weekExpenses, 'week');
-    
-    return { todayExpenses, weekExpenses, todaySummary, weekSummary };
-  }, [expenses]);
   const [loading, setLoading] = useState(true);
   const [editModalVisible, setEditModalVisible] = useState(false);
   const [selectedExpense, setSelectedExpense] = useState<Expense | null>(null);
@@ -248,6 +230,25 @@ function DashboardScreen() {
       setLoading(false);
     }
   }, []);
+
+  // Subscribe to expense changes for automatic updates
+  useExpenseSubscription(useCallback(() => {
+    loadData();
+  }, [loadData]));
+
+  // Optimized memoized calculations for better performance
+  const { todayExpenses, todaySummary, weekSummary } = useMemo(() => {
+    const today = new Date().toDateString();
+    
+    const todayExpenses = expenses.filter(expense => 
+      new Date(expense.date).toDateString() === today
+    );
+    
+    const todaySummary = generateExpenseSummary(todayExpenses, 'today');
+    const weekSummary = generateExpenseSummary(expenses, 'week');
+    
+    return { todayExpenses, todaySummary, weekSummary };
+  }, [expenses]);
 
   const onRefresh = useCallback(async () => {
     setRefreshing(true);

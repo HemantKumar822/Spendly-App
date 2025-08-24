@@ -8,6 +8,7 @@ import {
   Alert,
   Switch,
   RefreshControl,
+  Linking,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -43,7 +44,6 @@ export default function SettingsScreen() {
   const icons = useResponsiveIcons();
   const styles = getStyles(theme, isTablet, spacing, typography, icons);
   
-  const [aiEnabled, setAiEnabled] = useState(false);
   const [aiStatus, setAiStatus] = useState<'checking' | 'available' | 'unavailable'>('checking');
   const [totalExpenses, setTotalExpenses] = useState(0);
   const [totalBudgets, setTotalBudgets] = useState(0);
@@ -78,10 +78,8 @@ export default function SettingsScreen() {
     try {
       const health = await AIService.checkAIServiceHealth();
       setAiStatus(health.available ? 'available' : 'unavailable');
-      setAiEnabled(health.available);
     } catch (error) {
       setAiStatus('unavailable');
-      setAiEnabled(false);
     }
   };
 
@@ -177,9 +175,13 @@ export default function SettingsScreen() {
   const handleAbout = () => {
     Alert.alert(
       'About Spendly',
-      'Spendly v1.0.0\n\nA smart expense tracker for college students with AI-powered insights.\n\nBuilt with React Native & Expo',
+      'Spendly v1.0.0-beta\n\nA smart expense tracker for college students with AI-powered insights.\n\nBuilt with React Native & Expo',
       [{ text: 'OK' }]
     );
+  };
+
+  const handleInstagram = () => {
+    Linking.openURL('https://www.instagram.com/tech_hemant.ai?igsh=MXZ3bnJwdzNvcTl3OQ==');
   };
 
   const settingsData: SettingsItem[] = [
@@ -195,39 +197,20 @@ export default function SettingsScreen() {
       }
     },
     {
-      id: 'ai-features',
-      title: 'AI Features',
-      subtitle: aiStatus === 'available' ? 'Smart categorization enabled' : 'AI service unavailable',
-      icon: 'auto-awesome',
-      type: 'toggle',
-      value: aiEnabled,
-      onToggle: (value) => {
-        if (aiStatus === 'available') {
-          setAiEnabled(value);
-        } else {
-          Alert.alert(
-            'AI Unavailable',
-            'AI features are currently unavailable. The app will use rule-based categorization.',
-            [{ text: 'OK' }]
-          );
-        }
-      }
-    },
-    {
       id: 'export-data',
       title: 'Export Data',
-      subtitle: 'Save your data to a file',
+      subtitle: 'Coming Soon',
       icon: 'file-download',
       type: 'action',
-      onPress: handleExportData
+      onPress: () => Alert.alert('Coming Soon', 'This feature will be available in a future update.')
     },
     {
       id: 'import-data',
       title: 'Import Data',
-      subtitle: 'Restore data from backup',
+      subtitle: 'Coming Soon',
       icon: 'file-upload',
       type: 'action',
-      onPress: handleImportData
+      onPress: () => Alert.alert('Coming Soon', 'This feature will be available in a future update.')
     },
     {
       id: 'clear-data',
@@ -236,6 +219,14 @@ export default function SettingsScreen() {
       icon: 'delete-sweep',
       type: 'action',
       onPress: handleClearData
+    },
+    {
+      id: 'instagram',
+      title: 'Follow on Instagram',
+      subtitle: 'tech_hemant.ai',
+      icon: 'photo-camera',
+      type: 'action',
+      onPress: handleInstagram
     },
     {
       id: 'about',
@@ -247,11 +238,14 @@ export default function SettingsScreen() {
     }
   ];
 
-  const renderSettingsItem = (item: SettingsItem) => {
+  const renderSettingsItem = (item: SettingsItem, index: number) => {
+    // Apply special styling to the last item to remove the bottom border
+    const isLastItem = index === settingsData.length - 1;
+    
     return (
       <TouchableOpacity
         key={item.id}
-        style={styles.settingsItem}
+        style={isLastItem ? styles.settingsItemLast : styles.settingsItem}
         onPress={() => {
           if (item.type === 'action' && item.onPress) {
             triggerLightHaptic();
@@ -355,7 +349,7 @@ export default function SettingsScreen() {
             </View>
             <Text style={styles.aiStatusDescription}>
               {aiStatus === 'available' 
-                ? 'Smart categorization and insights are working'
+                ? 'Smart categorization and insights are enabled'
                 : 'Using rule-based categorization'
               }
             </Text>
@@ -369,39 +363,23 @@ export default function SettingsScreen() {
           delay={300}
         >
           <Text style={styles.sectionTitle}>Preferences</Text>
-          {settingsData.map(renderSettingsItem)}
+          {settingsData.map((item, index) => renderSettingsItem(item, index))}
         </AnimatedCard>
 
         {/* Footer */}
         <View style={styles.footer}>
           <Text style={styles.footerText}>
-            Made with ❤️ for college students
+            Made with ❤️ by Hemant
           </Text>
-          <Text style={styles.versionText}>Version 1.0.0</Text>
+          <Text style={styles.versionText}>Version 1.0.0-beta</Text>
         </View>
-        
-        {/* Package Info */}
-        <AnimatedCard 
-          style={styles.infoCard}
-          animationType="fade"
-          delay={400}
-        >
-          <MaterialIcons name="info-outline" size={icons.cardIcon} color={theme.primary} />
-          <Text style={styles.infoTitle}>Enhanced Export Features</Text>
-          <Text style={styles.infoText}>
-            For full file export functionality, install these packages:
-            {"\n"}• expo-file-system
-            {"\n"}• expo-sharing
-            {"\n"}• expo-document-picker
-          </Text>
-        </AnimatedCard>
-        </ScrollView>
-        
-        {/* Loading Overlay */}
-        <OverlayLoadingState 
-          visible={exporting}
-          message="Exporting your data..."
-        />
+      </ScrollView>
+      
+      {/* Loading Overlay */}
+      <OverlayLoadingState 
+        visible={exporting}
+        message="Exporting your data..."
+      />
     </SafeAreaView>
   );
 }
@@ -568,6 +546,13 @@ const getStyles = (theme: Theme, isTablet: boolean, spacing: any, typography: an
     fontSize: typography.caption,
     color: theme.textSecondary,
     marginTop: 2,
+  },
+  settingsItemLast: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: spacing.itemMargin,
+    // No borderBottom - this is the last item in the section
   },
   footer: {
     alignItems: 'center',

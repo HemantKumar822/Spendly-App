@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   StyleSheet,
   View,
@@ -9,6 +9,8 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
+  Animated,
+  Easing,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialIcons } from '@expo/vector-icons';
@@ -30,6 +32,7 @@ import ResponsiveContainer, { ResponsiveGrid } from '@/components/ui/ResponsiveC
 import { useResponsive, useResponsiveSpacing, useResponsiveTypography, useResponsiveIcons } from '@/hooks/useResponsive';
 import { useTheme, Theme } from '@/contexts/ThemeContext';
 import { useHaptics } from '@/hooks/useHaptics';
+import { useExpenseSubscription } from '@/hooks/useDataSubscription';
 
 export default function AddExpenseScreen() {
   return (
@@ -58,6 +61,12 @@ function AddExpenseContent() {
   
   const [categories, setCategories] = useState<ExpenseCategory[]>([]);
   const [loading, setLoading] = useState(false);
+  const [showSuccessAnimation, setShowSuccessAnimation] = useState(false);
+  
+  // Animation refs
+  const successScale = useRef(new Animated.Value(0)).current;
+  const successOpacity = useRef(new Animated.Value(0)).current;
+  
   // Enhanced validation with real-time feedback
   const {
     validateAmount,
@@ -80,11 +89,29 @@ function AddExpenseContent() {
   const [aiResponse, setAiResponse] = useState<string>('');
   const [datePickerVisible, setDatePickerVisible] = useState(false);
 
+  // Subscribe to expense changes to keep data fresh
+  useExpenseSubscription(() => {
+    // This will help keep the UI consistent when expenses are added/updated elsewhere
+  });
+
   useEffect(() => {
     loadCategories();
     checkAIStatus();
   }, []);
   
+  // Add this useEffect to reset form when component mounts
+  useEffect(() => {
+    // Reset form to default state when component mounts
+    setForm({
+      amount: '',
+      description: '',
+      categoryId: '',
+      note: '',
+      date: new Date(),
+    });
+    clearAllValidation();
+  }, []);
+
   const checkAIStatus = async () => {
     try {
       const health = await AIService.checkAIServiceHealth();
@@ -168,29 +195,59 @@ function AddExpenseContent() {
       
       await StorageService.saveExpense(expense);
       
-      Alert.alert(
-        'Success',
-        'Expense added successfully!',
-        [
-          {
-            text: 'Add Another',
-            onPress: () => {
-              setForm({
-                amount: '',
-                description: '',
-                categoryId: '',
-                note: '',
-                date: new Date(),
-              });
-              clearAllValidation();
-            },
-          },
-          {
-            text: 'Go to Dashboard',
-            onPress: () => router.push('/(tabs)'),
-          },
-        ]
-      );
+      // Trigger haptic feedback for success
+      triggerSuccessHaptic();
+      
+      // Show success animation
+      setShowSuccessAnimation(true);
+      Animated.parallel([
+        Animated.spring(successScale, {
+          toValue: 1,
+          friction: 6,
+          tension: 120,
+          useNativeDriver: true,
+        }),
+        Animated.timing(successOpacity, {
+          toValue: 1,
+          duration: 400,
+          easing: Easing.out(Easing.ease),
+          useNativeDriver: true,
+        })
+      ]).start();
+      
+      // Reset form to default state
+      setForm({
+        amount: '',
+        description: '',
+        categoryId: '',
+        note: '',
+        date: new Date(),
+      });
+      clearAllValidation();
+      
+      // Keep animation visible longer and then navigate to dashboard
+      setTimeout(() => {
+        Animated.parallel([
+          Animated.timing(successOpacity, {
+            toValue: 0,
+            duration: 300,
+            useNativeDriver: true,
+          }),
+          Animated.spring(successScale, {
+            toValue: 0.8,
+            friction: 6,
+            tension: 120,
+            useNativeDriver: true,
+          })
+        ]).start(() => {
+          // Keep the animation visible a bit longer before hiding completely
+          setTimeout(() => {
+            setShowSuccessAnimation(false);
+            router.push('/(tabs)');
+          }, 100);
+        });
+      }, 1500); // Show animation for 1.5 seconds instead of 1 second
+      
     } catch (error) {
       console.error('Error saving expense:', error);
       Alert.alert('Error', 'Failed to save expense. Please try again.');
@@ -254,6 +311,37 @@ function AddExpenseContent() {
 
   return (
     <SafeAreaView style={[styles.container, { backgroundColor: theme.background }]}>
+      {/* Success Animation Overlay */}
+      {showSuccessAnimation && (
+        <Animated.View 
+          style={[
+            styles.successOverlay,
+            {
+              opacity: successOpacity,
+            }
+          ]}
+        >
+          <Animated.View 
+            style={[
+              styles.successContainer,
+              {
+                transform: [{ scale: successScale }]
+              }
+            ]}
+          >
+            <View style={styles.successIconContainer}>
+              <MaterialIcons 
+                name="account-balance-wallet" 
+                size={70} 
+                color="#4ECDC4" 
+              />
+            </View>
+            <Text style={styles.successText}>Expense Added!</Text>
+            <Text style={styles.successSubtext}>Redirecting to dashboard...</Text>
+          </Animated.View>
+        </Animated.View>
+      )}
+      
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.keyboardView}
@@ -347,7 +435,7 @@ function AddExpenseContent() {
                 />
                 
                 {/* AI Suggestion */}
-                {form.description.length > 2 && form.amount && aiStatus === 'available' && (
+                {form.description.length > 2 && form.amount && (
                   <TouchableOpacity
                     onPress={() => {
                       triggerMediumHaptic();
@@ -811,5 +899,52 @@ const getStyles = (theme: Theme, isTablet: boolean, spacing: any, typography: an
     color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '600',
+  },
+  successOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.4)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 1000,
+  },
+  successContainer: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    padding: 30,
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '80%',
+    maxWidth: 300,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 10,
+    elevation: 10,
+  },
+  successIconContainer: {
+    marginBottom: 15,
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: '#E8F8F7',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  successText: {
+    fontSize: 22,
+    fontWeight: '700',
+    color: '#4ECDC4',
+    marginTop: 10,
+    textAlign: 'center',
+  },
+  successSubtext: {
+    fontSize: 14,
+    color: '#666666',
+    marginTop: 5,
+    textAlign: 'center',
   },
 });

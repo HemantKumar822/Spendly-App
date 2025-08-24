@@ -17,6 +17,7 @@ import useFormValidation from '@/hooks/useFormValidation';
 import { ValidatedAmountInput, ValidatedTextInput, FormSection, ValidationSummary } from '@/components/ui/ValidatedFormInputs';
 import { DEFAULT_CATEGORIES } from '@/types/categories';
 import { useTheme, Theme } from '@/contexts/ThemeContext';
+import { useExpenseSubscription } from '@/hooks/useDataSubscription';
 
 interface EditExpenseModalProps {
   visible: boolean;
@@ -39,6 +40,11 @@ export default function EditExpenseModal({ visible, expense, onClose, onSave }: 
   const [categories, setCategories] = useState<ExpenseCategory[]>([]);
   const [loading, setLoading] = useState(false);
   
+  // Subscribe to expense changes to keep data fresh
+  useExpenseSubscription(() => {
+    // This will help keep the UI consistent when expenses are added/updated elsewhere
+  });
+
   // Enhanced validation with real-time feedback
   const {
     validateAmount,

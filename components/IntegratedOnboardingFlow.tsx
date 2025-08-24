@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   StyleSheet,
   View,
@@ -149,8 +149,8 @@ export default function IntegratedOnboardingFlow({ onComplete }: IntegratedOnboa
       await StorageService.setOnboardingCompleted();
       await StorageService.setFirstLaunchCompleted();
       
-      // Populate with sample data
-      await StorageService.populateSampleData();
+      // DO NOT populate with sample data for new users as per requirements
+      // await StorageService.populateSampleData();
       
       onComplete();
     } catch (error) {
@@ -244,6 +244,19 @@ export default function IntegratedOnboardingFlow({ onComplete }: IntegratedOnboa
     );
   };
 
+  // Proper scroll handler implementation that also updates current slide
+  const handleScroll = (event: any) => {
+    const { contentOffset } = event.nativeEvent;
+    const offsetX = contentOffset.x;
+    scrollX.setValue(offsetX);
+    
+    // Calculate current slide based on scroll position
+    const slideIndex = Math.round(offsetX / screenWidth);
+    if (slideIndex !== currentSlide && slideIndex >= 0 && slideIndex < onboardingSlides.length) {
+      setCurrentSlide(slideIndex);
+    }
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       {/* Skip Button */}
@@ -264,10 +277,7 @@ export default function IntegratedOnboardingFlow({ onComplete }: IntegratedOnboa
         pagingEnabled
         showsHorizontalScrollIndicator={false}
         style={styles.slideContainer}
-        onScroll={Animated.event(
-          [{ nativeEvent: { contentOffset: { x: scrollX } } }],
-          { useNativeDriver: true }
-        )}
+        onScroll={handleScroll}
         scrollEventThrottle={16}
       >
         {onboardingSlides.map((slide, index) => renderSlide(slide, index))}
@@ -340,18 +350,21 @@ const getStyles = (theme: Theme, isTablet: boolean, spacing: any, typography: an
     flexDirection: 'row',
     justifyContent: 'flex-end',
     paddingHorizontal: spacing.containerPadding,
-    paddingVertical: spacing.itemMargin,
+    paddingVertical: spacing.sectionPadding,
+    paddingTop: spacing.sectionPadding * 2, // Better positioning to avoid half-cut appearance
   },
   skipButton: {
     paddingHorizontal: spacing.itemMargin,
     paddingVertical: spacing.listGap,
-    borderRadius: spacing.buttonRadius,
-    backgroundColor: theme.surfaceVariant,
+    // Minimal styling with no background
+    backgroundColor: 'transparent',
+    borderRadius: 0,
   },
   skipButtonText: {
     fontSize: typography.caption,
-    color: theme.text,
+    color: theme.textSecondary, // Subtle color
     fontWeight: '500',
+    textDecorationLine: 'underline', // Underline for better visibility
   },
   slideContainer: {
     flex: 1,

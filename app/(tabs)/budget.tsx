@@ -23,6 +23,7 @@ import ResponsiveContainer, { ResponsiveTwoColumn, ResponsiveCardLayout } from '
 import { useResponsive, useResponsiveSpacing, useResponsiveTypography, useResponsiveIcons } from '@/hooks/useResponsive';
 import { useTheme, Theme } from '@/contexts/ThemeContext';
 import { useHaptics } from '@/hooks/useHaptics';
+import { useExpenseSubscription, useBudgetSubscription } from '@/hooks/useDataSubscription';
 
 // Add this interface for the budget creation form
 interface BudgetCreationForm {
@@ -56,24 +57,6 @@ export default function BudgetScreen() {
     categoryId: '',
   });
 
-
-  // Memoized budget progress calculations
-  const memoizedBudgetProgress = useMemo(() => {
-    // We still want to show budgets even if there are no expenses yet
-    if (!budgets.length) {
-      console.log('📉 No budgets, returning empty progress array');
-      return [];
-    }
-    
-    // Calculate progress even if there are no expenses (progress will be 0%)
-    const progress = budgets
-      .filter(b => b.isActive)
-      .map(budget => calculateBudgetProgress(budget, expenses));
-    
-    console.log('📊 Calculated budget progress:', progress);
-    return progress;
-  }, [budgets, expenses]);
-
   const loadData = useCallback(async () => {
     try {
       const [budgetsData, expensesData, categoriesData] = await Promise.all([
@@ -99,6 +82,32 @@ export default function BudgetScreen() {
       setLoading(false);
     }
   }, []);
+
+  // Subscribe to expense and budget changes for automatic updates
+  useExpenseSubscription(useCallback(() => {
+    loadData();
+  }, [loadData]));
+
+  useBudgetSubscription(useCallback(() => {
+    loadData();
+  }, [loadData]));
+
+  // Memoized budget progress calculations
+  const memoizedBudgetProgress = useMemo(() => {
+    // We still want to show budgets even if there are no expenses yet
+    if (!budgets.length) {
+      console.log('📉 No budgets, returning empty progress array');
+      return [];
+    }
+    
+    // Calculate progress even if there are no expenses (progress will be 0%)
+    const progress = budgets
+      .filter(b => b.isActive)
+      .map(budget => calculateBudgetProgress(budget, expenses));
+    
+    console.log('📊 Calculated budget progress:', progress);
+    return progress;
+  }, [budgets, expenses]);
 
   // Update budget progress when budgets or expenses change
   useEffect(() => {

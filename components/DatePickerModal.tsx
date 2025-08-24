@@ -386,7 +386,6 @@ export default memo(function DatePickerModal({
             onPress={() => {
               if (!isDisabled) {
                 onDateSelect(cloneDay);
-                handleClose();
               }
             }}
             disabled={isDisabled}
@@ -417,7 +416,7 @@ export default memo(function DatePickerModal({
       days = [];
     }
     return <View style={styles.calendar}>{rows}</View>;
-  }, [currentMonth, selectedDate, maxDate, minDate, onDateSelect, handleClose, styles]);
+  }, [currentMonth, selectedDate, maxDate, minDate, onDateSelect, styles]);
 
   const renderQuickActions = useCallback(() => {
     const today = new Date();
@@ -443,7 +442,6 @@ export default memo(function DatePickerModal({
               ]}
               onPress={() => {
                 onDateSelect(date);
-                handleClose();
               }}
             >
               <Text style={[
@@ -457,7 +455,7 @@ export default memo(function DatePickerModal({
         </View>
       </View>
     );
-  }, [selectedDate, onDateSelect, handleClose, styles]);
+  }, [selectedDate, onDateSelect, styles]);
 
   return (
     <Modal
